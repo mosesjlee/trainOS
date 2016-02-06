@@ -1,10 +1,10 @@
 #include <kernel.h>
 
-#define WINDOW_ADDR 0xB8000
-#define TEXT_ATTR 0x0F00
-#define CURSOR_ATTR 0x8F00
-#define PHYS_SCRN_WT 80
-#define PHYS_SCRN_HT 25
+#define WND_ADDR      0xB8000
+#define TXT_ATTR      0x0F00
+#define CURSOR_ATTR   0x8F00
+#define MAX_WT        80
+#define MAX_HT        25
 
 void move_cursor(WINDOW* wnd, int x, int y)
 {
@@ -18,7 +18,7 @@ void move_cursor(WINDOW* wnd, int x, int y)
 void remove_cursor(WINDOW* wnd)
 {
    //wnd->cursor_char = ' ';
-   poke_w(WINDOW_ADDR + (wnd->cursor_x + (wnd->cursor_y * wnd->width)) * 2,
+   poke_w(WND_ADDR + (wnd->cursor_x + (wnd->cursor_y * wnd->width)) * sizeof(WORD),
  		CURSOR_ATTR | wnd->cursor_char);
 }
 
@@ -26,7 +26,7 @@ void remove_cursor(WINDOW* wnd)
 void show_cursor(WINDOW* wnd)
 {
    //wnd->cursor_char = '|';
-   poke_w(WINDOW_ADDR + ((wnd->cursor_x) + (wnd->cursor_y * wnd->width)) * 2,
+   poke_w(WND_ADDR + ((wnd->cursor_x) + (wnd->cursor_y * wnd->width)) * sizeof(WORD),
  		CURSOR_ATTR | wnd->cursor_char);
 }
 
@@ -36,7 +36,7 @@ void clear_window(WINDOW* wnd)
    int i, j;
    int totalArea = wnd->width * wnd->height;
    for(i = 0; i < totalArea; i++) {
-      poke_w(WINDOW_ADDR + i * 2, ' ' | TEXT_ATTR);
+      poke_w(WND_ADDR + i * sizeof(WORD), ' ' | TXT_ATTR);
    }
    move_cursor(wnd, 0, 0);
 }
@@ -45,7 +45,7 @@ void clear_window(WINDOW* wnd)
 void output_char(WINDOW* wnd, unsigned char c)
 {
    //Save the address of the window ptr and any offsets
-   WORD * wnd_ptr = WINDOW_ADDR + (wnd->x + wnd->y * PHYS_SCRN_WT) * 2; 
+   WORD * wnd_ptr = WND_ADDR + (wnd->x + wnd->y * MAX_WT) * sizeof(WORD); 
 
    //Save current location of cursor
    int c_x = wnd->cursor_x, c_y = wnd->cursor_y;
@@ -68,7 +68,7 @@ void output_char(WINDOW* wnd, unsigned char c)
       //References to the destination and source
       WORD * dest = wnd_ptr, * source;
       for(j = 1; j < wnd->height; j++){
-         source = WINDOW_ADDR + (wnd->x + (wnd->y + j) * PHYS_SCRN_WT) * 2;
+         source = WND_ADDR + (wnd->x + (wnd->y + j) * MAX_WT) * sizeof(WORD);
          for(i = 0; i < wnd->width; i++) {
             *dest++ = *source++;
          }
@@ -77,20 +77,20 @@ void output_char(WINDOW* wnd, unsigned char c)
       }
   
       //Blank out the last line
-      source = WINDOW_ADDR + (wnd->x + (wnd->y + wnd->height-1) * PHYS_SCRN_WT) * 2;
+      source = WND_ADDR + (wnd->x + (wnd->y + wnd->height-1) * MAX_WT) * sizeof(WORD);
       for(i = 0; i < wnd->width; i++) {
-         poke_w(source++, ' ' | TEXT_ATTR);
+         poke_w(source++, ' ' | TXT_ATTR);
       }
    } 
 
    //Calculate offset from the base address
-   int offSet = c_x + (c_y * PHYS_SCRN_WT);
+   int offSet = c_x + (c_y * MAX_WT);
 
    //Move cursor up one
    move_cursor(wnd, c_x+1, c_y);
 
    //Write to screen
-   poke_w(&wnd_ptr[offSet], c | TEXT_ATTR);
+   poke_w(&wnd_ptr[offSet], c | TXT_ATTR);
 }
 
 void output_string(WINDOW* wnd, const char *str)

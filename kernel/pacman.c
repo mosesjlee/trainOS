@@ -113,14 +113,14 @@ int random()
 
 void init_ghost(GHOST* ghost)
 {
-    while (1) {
-	int x = random() % MAZE_WIDTH;
-	int y = random() % MAZE_HEIGHT;
-	if (maze[y][x] != ' ') continue;
-	ghost->x = x;
-	ghost->y = y;
-	break;
-    }
+   while (1) {
+	   int x = random() % MAZE_WIDTH;
+	   int y = random() % MAZE_HEIGHT;
+	   if (maze[y][x] != ' ') continue;
+	   ghost->x = x;
+	   ghost->y = y;
+	   break;
+   }
 }
 
 
@@ -128,6 +128,16 @@ void init_ghost(GHOST* ghost)
 
 void create_new_ghost()
 {
+   GHOST ghost;
+   init_ghost(&ghost);
+
+   while(1){
+      //remove ghost at old position
+      //compute new position of ghost
+      //show ghost at new position
+      //do a delay
+
+   }
 }
 
     

@@ -40,7 +40,20 @@ void print_process(WINDOW* wnd, PROCESS p)
 {
    char proc_detail[80];
    
-   //output_string(wnd, 
+   int i;
+   for(i = 0; i < 80; ++i){
+      proc_detail[80] = (char) 0;
+   }
+
+   unsigned short state = p->state;
+   switch(state){
+      case STATE_READY:
+         k_memcpy(proc_detail, "Ready", 7);
+       default:
+         assert(0);
+   }
+
+  // output_string(wnd, proc_detail);
 }
 
 void print_all_processes(WINDOW* wnd)

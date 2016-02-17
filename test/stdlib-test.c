@@ -29,6 +29,7 @@ int main()
 	RUN_TEST(test_memcpy_2);
 	RUN_TEST(test_memcmp_1);
 	RUN_TEST(test_memcmp_2);
+   RUN_TEST(test_memcmp_3);
 
 	printf("All tests passed!\n");
 	return (0);
@@ -112,5 +113,17 @@ int test_memcmp_2()
 		return (3);
 
 	return (TEST_OK);
+}
+
+int test_memcmp_3()
+{
+   char a1[] = {};
+   char a2[] = {};
+   int l = 0;
+
+   if(k_memcmp(a1, a2, l) == 0)
+      return (TEST_OK);
+
+   return (2);
 }
 

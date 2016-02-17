@@ -41,7 +41,7 @@ void add_ready_queue (PROCESS proc)
    }
    //If there are/is process(es)
    else {
-      proc->next = p;
+      proc->next = *p;
       proc->prev = (*p)->prev;
       (*p)->prev->next = proc;
       (*p)->prev = proc;
@@ -65,14 +65,14 @@ void remove_ready_queue (PROCESS proc)
   
    //If there is only one process all the pointers should point to itself
    if(proc == (*p)->next && proc == (*p)->prev) {
-      p = NULL;
+      *p = NULL;
    }
    //For all other scenarios
    else {
-      PROCESS * n = proc->next;
-      proc->prev->next = *n;
-      (*n)->prev = proc->prev;
-      ready_queue[proc->priority] = *n;
+      PROCESS n = proc->next;
+      proc->prev->next = n;
+      n->prev = proc->prev;
+      ready_queue[proc->priority] = n;
    }
    
 }

@@ -30,20 +30,21 @@ void add_ready_queue (PROCESS proc)
    //Set it to ready
    proc->state = STATE_READY;
 
-   PROCESS p = ready_queue[proc->priority];
+   //Pointer to a pointer
+   PROCESS * p = &ready_queue[proc->priority];
 
    //If there are no processes at that priority
-   if(p == NULL){
-      p = proc;
+   if(*p == NULL){
+      *p = proc;
       proc->prev = proc;
       proc->next = proc;
    }
    //If there are/is process(es)
    else {
       proc->next = p;
-      proc->prev = p->prev;
-      p->prev->next = proc;
-      p->prev = proc;
+      proc->prev = (*p)->prev;
+      (*p)->prev->next = proc;
+      (*p)->prev = proc;
    }
 }
 
@@ -60,18 +61,18 @@ void remove_ready_queue (PROCESS proc)
    //Assert
    assert(proc->magic == MAGIC_PCB);
 
-   PROCESS p = ready_queue[proc->priority];
+   PROCESS * p = &ready_queue[proc->priority];
   
    //If there is only one process all the pointers should point to itself
-   if(proc == p->next && proc == p->prev) {
+   if(proc == (*p)->next && proc == (*p)->prev) {
       p = NULL;
    }
    //For all other scenarios
    else {
-      PROCESS n = proc->next;
-      proc->prev->next = n;
-      n->prev = proc->prev;
-      ready_queue[proc->priority] = n;
+      PROCESS * n = proc->next;
+      proc->prev->next = *n;
+      (*n)->prev = proc->prev;
+      ready_queue[proc->priority] = *n;
    }
    
 }
@@ -88,6 +89,12 @@ void remove_ready_queue (PROCESS proc)
 
 PROCESS dispatcher()
 {
+   int i;
+   for(i = MAX_READY_QUEUES; i >= 0; i--){
+      if(ready_queue[i] != NULL){
+         return ready_queue[i]->next;
+      }
+   }
 }
 
 
@@ -119,4 +126,7 @@ void init_dispatcher()
    for(i = 0; i < MAX_READY_QUEUES; ++i){
       ready_queue[i] = NULL;
    }
+
+   //Adds the boot process to the ready queue
+   add_ready_queue(active_proc);
 }

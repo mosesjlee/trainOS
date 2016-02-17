@@ -65,7 +65,7 @@ void kprintf(const char* fmt, ...);
 /*
  * Max. number of processes
  */
-#define MAX_PROCS		20
+#define MAX_PROCS		10
 
 
 /*

@@ -1,29 +1,64 @@
 
 #include <kernel.h>
-
+#define PROCESS_BASE 640 * 1024
+#define PROCESS_SIZE 30 * 1024
 
 PCB pcb[MAX_PROCS];
-unsigned int numOfProcs;
 
 PORT create_process (void (*ptr_to_new_proc) (PROCESS, PARAM),
 		     int prio,
 		     PARAM param,
 		     char *name)
 {
-   //Do a check to see if process space available
-   if (numOfProcs <= MAX_PROCS)
-      return NULL;
+   //Look for empty
+   int i;
+   for(i = 0; i < MAX_PROCS; i++){
+      if(pcb[i].used == FALSE)
+         break;
+   }
 
-   pcb[numOfProcs].magic      = MAGIC_PCB;
-   pcb[numOfProcs].used       = TRUE;
-   pcb[numOfProcs].state      = STATE_READY;
-   pcb[numOfProcs].priority   = prio;
-   pcb[numOfProcs].first_port = NULL;
-   pcb[numOfProcs].name       = name;
+   MEM_ADDR esp;
+   PROCESS new_proc = &pcb[i];
+   
+   new_proc->magic      = MAGIC_PCB;
+   new_proc->used       = TRUE;
+   new_proc->state      = STATE_READY;
+   new_proc->priority   = prio;
+   new_proc->first_port = NULL;
+   new_proc->name       = name;
 
-   //Increment the process counter
-   numOfProcs++;
-  
+   esp = PROCESS_BASE - PROCESS_SIZE * i;
+
+   poke_l(esp, param);
+   esp -= sizeof(LONG);
+   poke_l(esp, new_proc);
+   esp -= sizeof(LONG);
+   poke_l(esp, 0);
+   esp -= sizeof(LONG);
+   poke_l(esp, ptr_to_new_proc);
+   esp -= sizeof(LONG);
+   
+   //0 out register 
+   poke_l(esp, 0);         //EAX
+   esp -= sizeof(LONG);
+   poke_l(esp, 0);         //ECX
+   esp -= sizeof(LONG);
+   poke_l(esp, 0);         //EDX
+   esp -= sizeof(LONG);
+   poke_l(esp, 0);         //EBX
+   esp -= sizeof(LONG);
+   poke_l(esp, 0);         //EBP
+   esp -= sizeof(LONG);
+   poke_l(esp, 0);         //ESI
+   esp -= sizeof(LONG);
+   poke_l(esp, 0);         //EDI
+
+   //Save the Stack pointer
+   new_proc->esp = esp;
+
+   add_ready_queue(new_proc);
+
+   return NULL;
 }
 
 
@@ -38,31 +73,25 @@ PROCESS fork()
 
 void print_process(WINDOW* wnd, PROCESS p)
 {
-   char proc_detail[80];
+   char ready[] = "READY";
+   char * name = p->name;
+   char activeLabel = ' ';
+
+   //Asterisk for the active process
+   if(active_proc == p)
+      activeLabel = '*';
    
-   int i;
-   for(i = 0; i < 80; ++i){
-      proc_detail[80] = (char) 0;
-   }
+   kprintf("%s %10s %c %5s %d %s\n", ready, " ", activeLabel, " ",p->priority, name);
 
-   unsigned short state = p->state;
-   switch(state){
-      case STATE_READY:
-         k_memcpy(proc_detail, "Ready", 7);
-       default:
-         assert(0);
-   }
-
-  // output_string(wnd, proc_detail);
 }
 
 void print_all_processes(WINDOW* wnd)
 {
    //Print out header
-   char header[] = "State             Active Prio Name\n"; 
-   output_string(wnd, header);
+   kprintf("%s %10s %s %s %s\n", "State", " ", "Active", "Prio", "Name");
 
-   char border[] = "-------------------------------------------------";
+   //Print border
+   char border[] = "-------------------------------------------------\n";
    output_string(wnd, border);
 
    int i;
@@ -77,8 +106,11 @@ void print_all_processes(WINDOW* wnd)
 
 void init_process()
 {
-   //Initialize the process counter
-   numOfProcs = 0;
+   int i;
+   for(i = 0; i < MAX_PROCS; i++){
+      pcb[i].used = FALSE;
+      pcb[i].magic = 0;
+   }
 
    pcb[0].magic      = MAGIC_PCB;
    pcb[0].used       = TRUE;
@@ -87,8 +119,7 @@ void init_process()
    pcb[0].first_port = NULL;
    pcb[0].name       = "Boot process";
 
-   //Increment the process counter;
-   numOfProcs++;
+   active_proc = &pcb[0];
 }
 
 

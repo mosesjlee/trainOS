@@ -10,6 +10,7 @@ void test_dispatcher_5_process_d(PROCESS self, PARAM param)
     print_all_processes(kernel_window);
     kprintf("\n");
 
+    kprintf("check sum %d", check_sum);
     if (check_sum != 2)
        test_failed(23);
 

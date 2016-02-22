@@ -89,15 +89,20 @@ void remove_ready_queue (PROCESS proc)
 
 PROCESS dispatcher()
 {
+
    int i;
-   for(i = MAX_READY_QUEUES; i >= 0; i--){
+   for(i = MAX_READY_QUEUES - 1; i >= 0; i--){
       if(ready_queue[i] != NULL){
-         return ready_queue[i]->next;
+         PROCESS p = ready_queue[i];
+         ready_queue[i] = p->next;
+         return p;
       }
    }
 }
 
-
+void check_active(){
+   assert(active_proc != NULL);
+}
 
 /*
  * resign
@@ -109,6 +114,26 @@ PROCESS dispatcher()
  */
 void resign()
 {
+   asm("pushl %edi");
+   asm("pushl %esi");
+   asm("pushl %ebp");
+   asm("pushl %ebx");
+   asm("pushl %edx");
+   asm("pushl %ecx");
+   asm("pushl %eax");
+
+   asm("movl %%esp, %0" : "=r" (active_proc->esp) :);
+   active_proc = dispatcher();
+   check_active();
+   asm("movl %0, %%esp" : : "r" (active_proc->esp));
+   
+   asm("popl %eax");
+   asm("popl %ecx");
+   asm("popl %edx");
+   asm("popl %ebx");
+   asm("popl %ebp");
+   asm("popl %esi");
+   asm("popl %edi");
 }
 
 

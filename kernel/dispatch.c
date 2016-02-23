@@ -128,6 +128,7 @@ void resign()
    asm("popl %ebp");
    asm("popl %esi");
    asm("popl %edi");
+   asm("ret");
 }
 
 

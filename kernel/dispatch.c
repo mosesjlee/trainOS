@@ -12,9 +12,6 @@ PROCESS active_proc;
  */
 PCB *ready_queue [MAX_READY_QUEUES];
 
-
-
-
 /*
  * add_ready_queue
  *----------------------------------------------------------------------------
@@ -34,7 +31,7 @@ void add_ready_queue (PROCESS proc)
    PROCESS * p = &ready_queue[proc->priority];
 
    //If there are no processes at that priority
-   if(*p == NULL){
+   if(ready_queue[proc->priority] == NULL){
       *p = proc;
       proc->prev = proc;
       proc->next = proc;
@@ -61,11 +58,9 @@ void remove_ready_queue (PROCESS proc)
    //Assert
    assert(proc->magic == MAGIC_PCB);
 
-   PROCESS * p = &ready_queue[proc->priority];
-  
    //If there is only one process all the pointers should point to itself
-   if(proc == (*p)->next && proc == (*p)->prev) {
-      *p = NULL;
+   if(ready_queue[proc->priority]->next == proc && ready_queue[proc->priority] == proc) {
+      ready_queue[proc->priority] = NULL;
    }
    //For all other scenarios
    else {
@@ -74,7 +69,6 @@ void remove_ready_queue (PROCESS proc)
       n->prev = proc->prev;
       ready_queue[proc->priority] = n;
    }
-   
 }
 
 

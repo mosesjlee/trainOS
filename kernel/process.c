@@ -24,7 +24,7 @@ PORT create_process (void (*ptr_to_new_proc) (PROCESS, PARAM),
    new_proc->used       = TRUE;
    new_proc->state      = STATE_READY;
    new_proc->priority   = prio;
-   new_proc->first_port = NULL;
+   new_proc->first_port = create_new_port(new_proc);
    new_proc->name       = name;
 
    esp = PROCESS_BASE - PROCESS_SIZE * i;
@@ -57,8 +57,8 @@ PORT create_process (void (*ptr_to_new_proc) (PROCESS, PARAM),
    new_proc->esp = esp;
 
    add_ready_queue(new_proc);
-
-   return NULL;
+   
+   return new_proc->first_port;
 }
 
 

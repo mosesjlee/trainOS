@@ -22,7 +22,7 @@ PORT allocate_port(PROCESS * owner)
       }
    }
 
-   return &ports[i];
+   return ports[i];
 }
 
 PORT create_port()
@@ -129,15 +129,7 @@ void* receive (PROCESS* sender)
    if(p->first_port->blocked_list_head != NULL)
    {
       PROCESS s = p->first_port->blocked_list_head;
-      if(s->state == STATE_MESSAGE_BLOCKED)
-      {
-      }
-      if(s->state == STATE_SEND_BLOCKED)
-      {
-      }
-   }
-   else
-   {
+
    }
 }
 

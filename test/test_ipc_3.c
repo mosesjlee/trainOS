@@ -24,6 +24,7 @@ void test_ipc_3_sender_process(PROCESS self, PARAM param)
  
     kprintf("%s: sending a message using send()...\n",
 	    self->name);
+
     send(receiver_port, &data1);
 
     if (check_sum != 3)
@@ -40,6 +41,7 @@ void test_ipc_3_sender_process(PROCESS self, PARAM param)
      */
     kprintf("%s: sending a message using message()...\n",
 	    self->name);
+
     message(receiver_port, &data2);
     if (check_sum != 15)
         test_failed(54); 
@@ -67,11 +69,13 @@ void test_ipc_3_receiver_process(PROCESS self, PARAM param)
     kprintf("%s: receiving the first message...\n", self->name);
     data = (int*) receive (&sender);
 
+
     if (check_sum != 1)
 	test_failed(47);
 
     kprintf("%s: received a message from %s, parameter = %d\n",
             self->name, sender->name, *data);
+
     check_sum += 2;
 
     check_process("Receiver", STATE_READY, TRUE);

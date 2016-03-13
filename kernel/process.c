@@ -73,7 +73,36 @@ PROCESS fork()
 
 void print_process(WINDOW* wnd, PROCESS p)
 {
-   char ready[] = "READY";
+   const static char * state_list[] = {"READY", 
+                          "SEND BLOCKED", 
+                          "REPLY BLOCKED", 
+                          "RECEIVE BLOCKED",
+                          "MESSAGE BLOCKED", 
+                          "INTR BLOCKED"};
+   char * state;
+   switch (p->state){
+   case STATE_READY:
+      state = state_list[0];
+      break;
+   case STATE_SEND_BLOCKED:
+      state = state_list[1];
+      break;
+   case STATE_REPLY_BLOCKED:
+      state = state_list[2];
+      break;
+   case STATE_RECEIVE_BLOCKED:
+      state = state_list[3];
+      break;
+   case STATE_MESSAGE_BLOCKED:
+      state = state_list[4];
+      break;
+   case STATE_INTR_BLOCKED:
+      state = state_list[5];
+      break;
+   default:
+      assert(0);
+      break;
+   }
    char * name = p->name;
    char activeLabel = ' ';
 
@@ -81,17 +110,17 @@ void print_process(WINDOW* wnd, PROCESS p)
    if(active_proc == p)
       activeLabel = '*';
    
-   kprintf("%s %10s %c %5s %d %s\n", ready, " ", activeLabel, " ",p->priority, name);
+   kprintf("%s %15s %c %5s %d %s\n", state, " ", activeLabel, " ",p->priority, name);
 
 }
 
 void print_all_processes(WINDOW* wnd)
 {
    //Print out header
-   kprintf("%s %10s %s %s %s\n", "State", " ", "Active", "Prio", "Name");
+   kprintf("%s %20s %s %s %s\n", "State", " ", "Active", "Prio", "Name");
 
    //Print border
-   char border[] = "-------------------------------------------------\n";
+   char border[] = "-------------------------------------------------------\n";
    output_string(wnd, border);
 
    int i;

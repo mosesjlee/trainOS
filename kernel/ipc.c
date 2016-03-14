@@ -20,7 +20,13 @@ PORT allocate_port(PROCESS * owner)
          break;
       }
    }
-   if((*owner)->first_port == NULL)
+
+   if((*owner)->first_port != NULL)
+      ports[i].next = (*owner)->first_port;
+
+  
+   (*owner)->first_port = &ports[i];
+      
 
    return &ports[i];
 }

@@ -24,11 +24,13 @@ PORT create_process (void (*ptr_to_new_proc) (PROCESS, PARAM),
    new_proc->used       = TRUE;
    new_proc->state      = STATE_READY;
    new_proc->priority   = prio;
-   new_proc->first_port = create_new_port(new_proc);
+   new_proc->first_port = NULL;
    new_proc->name       = name;
 
-   esp = PROCESS_BASE - PROCESS_SIZE * i;
+   PORT p = create_new_port(new_proc);
 
+   esp = PROCESS_BASE - PROCESS_SIZE * i;
+   
    poke_l(esp, param);
    esp -= sizeof(LONG);
    poke_l(esp, new_proc);
@@ -58,7 +60,7 @@ PORT create_process (void (*ptr_to_new_proc) (PROCESS, PARAM),
 
    add_ready_queue(new_proc);
    
-   return new_proc->first_port;
+   return p;
 }
 
 

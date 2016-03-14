@@ -1,4 +1,3 @@
-
 #include <kernel.h>
 
 
@@ -7,25 +6,25 @@ PORT_DEF ports[MAX_PORTS];
 //Helper function
 PORT allocate_port(PROCESS * owner)
 {
+   PROCESS p = *owner;
 
-   assert((*owner)->magic == MAGIC_PCB);
+   assert(p->magic == MAGIC_PCB);
    int i;
    for(i = 0; i < MAX_PORTS; ++i){
       if(ports[i].owner == NULL && ports[i].used == FALSE){
          //Assert the value
          assert(ports[i].magic == MAGIC_PORT);
-         ports[i].owner = *owner;
+         ports[i].owner = p;
          ports[i].used  = TRUE;
          ports[i].open  = TRUE;
          break;
       }
    }
 
-   if((*owner)->first_port != NULL)
-      ports[i].next = (*owner)->first_port;
+   if(p->first_port != NULL)
+      ports[i].next = p->first_port;
 
-  
-   (*owner)->first_port = &ports[i];
+   p->first_port = &ports[i];
       
 
    return &ports[i];
@@ -45,6 +44,7 @@ PORT create_new_port (PROCESS owner)
 
 void open_port (PORT port)
 {
+   assert(port->magic == MAGIC_PORT);
    port->open = TRUE;
 }
 
@@ -52,55 +52,59 @@ void open_port (PORT port)
 
 void close_port (PORT port)
 {
+   assert(port->magic == MAGIC_PORT);
    port->open = FALSE;
 }
 
 
-void add_to_blocked_list()
+void add_to_blocked_list(PORT * port)
 {
+   PORT dest_port = *port;
+   //If first element on that list
+   if(dest_port->blocked_list_head == NULL &&
+      dest_port->blocked_list_tail == NULL)
+   {
+      dest_port->blocked_list_head = active_proc;
+      dest_port->blocked_list_tail = active_proc;
+      active_proc->next_blocked = NULL; 
+   }
+   //If there are elements on that list
+   else
+   {
+      dest_port->blocked_list_tail->next_blocked = active_proc;
+      dest_port->blocked_list_tail = active_proc;
+      active_proc->next_blocked = NULL;
+   }
 }
 
 void send (PORT dest_port, void* data)
 {
-   assert (dest_port->owner->magic == MAGIC_PCB && dest_port->magic == MAGIC_PORT);
+   PROCESS owner = dest_port->owner;
+   assert (owner->magic == MAGIC_PCB);
+   assert(dest_port->magic == MAGIC_PORT);
 
-   if(dest_port->owner->state == STATE_RECEIVE_BLOCKED && 
+   if(owner->state == STATE_RECEIVE_BLOCKED && 
       dest_port->open == TRUE)
    {
-
       //The process receiving message is ready
-      dest_port->owner->state = STATE_READY;
+      owner->state = STATE_READY;
 
       //Pass the data pointer
-      dest_port->owner->param_data   = data;
+      owner->param_data   = data;
 
       //Set the param_proc
-      dest_port->owner->param_proc   = active_proc;
+      owner->param_proc   = active_proc;
 
       //Set current process to reply blocked
       active_proc->state      = STATE_REPLY_BLOCKED;
 
       //Add back to queue
-      add_ready_queue(dest_port->owner);
+      add_ready_queue(owner);
    }
    else
    {
-      //If first element on that list
-      if(dest_port->blocked_list_head == NULL &&
-         dest_port->blocked_list_tail == NULL)
-      {
-         dest_port->blocked_list_head = active_proc;
-         dest_port->blocked_list_tail = active_proc;
-         active_proc->next_blocked = active_proc; 
-      }
-      //If there are elements on that list
-      else
-      {
-         dest_port->blocked_list_tail->next_blocked = active_proc;
-         dest_port->blocked_list_tail = active_proc;
-         active_proc->next_blocked = dest_port->blocked_list_head;
-      }
-
+      //Call helper function
+      add_to_blocked_list(&dest_port);
       active_proc->param_data = data;
       active_proc->state = STATE_SEND_BLOCKED;
 
@@ -113,7 +117,11 @@ void send (PORT dest_port, void* data)
 
 void message (PORT dest_port, void* data)
 {
-   if(dest_port->owner->state == STATE_RECEIVE_BLOCKED &&
+   PROCESS owner = dest_port->owner;
+   assert(owner->magic == MAGIC_PCB);
+   assert(dest_port->magic == MAGIC_PORT);
+
+   if(owner->state == STATE_RECEIVE_BLOCKED &&
       dest_port->open == TRUE)
    {  
       dest_port->owner->state = STATE_READY;
@@ -123,21 +131,7 @@ void message (PORT dest_port, void* data)
    }
    else
    {
-       //If first element on that list
-      if(dest_port->blocked_list_head == NULL &&
-         dest_port->blocked_list_tail == NULL)
-      {
-         dest_port->blocked_list_head = active_proc;
-         dest_port->blocked_list_tail = active_proc;
-         active_proc->next_blocked = NULL; 
-      }
-      //If there are elements on that list
-      else
-      {
-         dest_port->blocked_list_tail->next_blocked = active_proc;
-         dest_port->blocked_list_tail = active_proc;
-         active_proc->next_blocked = NULL;
-      }
+      add_to_blocked_list(&dest_port);
       active_proc->param_data = data;
       active_proc->param_proc = dest_port->owner;
       active_proc->state = STATE_MESSAGE_BLOCKED;
@@ -174,9 +168,7 @@ void* receive (PROCESS* sender)
       {
          (*sender)->state = STATE_REPLY_BLOCKED;
       }
-      
    }
-
    else
    {
       //No senders get off queue

@@ -25,20 +25,22 @@ void dummy_wrapper();
 void dummy_isr()
 {
    asm("dummy_wrapper:");
-   asm("push %eax; push %ecx; push %edx");
-   asm("push %ebx; push %ebp; push %esi; push %edi");
+   //asm("push %eax; push %ecx; push %edx");
+  // asm("push %ebx; push %ebp; push %esi; push %edi");
 
    /*react to the interrupt */
 
    asm("movb $0x20, %al");
    asm("outb %al, $0x20");
-   asm("pop %edi; pop %esi; pop %ebp; pop %ebx");
-   asm("pop %edx; pop %ecx; pop %eax");
+   //asm("pop %edi; pop %esi; pop %ebp; pop %ebx");
+   //asm("pop %edx; pop %ecx; pop %eax");
    asm("iret");
 }
 
+void error_wrapper();
 void error_isr()
 {
+   asm("error_wrapper:");
    kprintf("Error ISR\n");
    while(1);
 }
@@ -51,22 +53,21 @@ void init_idt_entry (int intr_no, void (*isr) (void))
    idt[intr_no].type = 0xE;
    idt[intr_no].dword_count = 0;
    idt[intr_no].selector = CODE_SELECTOR;
-   idt[intr_no].unused = TRUE;
+   idt[intr_no].unused = 0;
 
    unsigned short lower_offset = 0x0000;
    unsigned short upper_offset = 0x0000;
    unsigned short temp = 0x0000;
-   if(16 > intr_no)
+   if(17 > intr_no)
    {
-      lower_offset = (0x0000 | (unsigned) error_isr) & 0xFFFF;
-      temp = ((unsigned) error_isr >> 16) & 0xFFFF;
-      upper_offset = (0x0000 | temp) & 0xFFFF;
+      lower_offset = 0xFFFF & (unsigned) error_wrapper;
+      upper_offset = ((unsigned) error_wrapper >> 16) & 0xFFFF;
    }
    else
    {
-      lower_offset = (0x0000 |(unsigned ) isr) & 0xFFFF;
+      lower_offset = 0xFFFF & (unsigned ) isr;
       temp = ((unsigned) isr >> 16) & 0xFFFF;
-      upper_offset = (0x0000 |(unsigned) temp) & 0xFFFF;
+      upper_offset = 0xFFFFF & (unsigned) temp;
    }
 
    idt[intr_no].offset_0_15 = lower_offset;
@@ -214,4 +215,6 @@ void init_interrupts()
    re_program_interrupt_controller(); 
 
    interrupts_initialized = TRUE;
+
+   asm("sti");
 }

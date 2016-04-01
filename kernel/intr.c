@@ -21,10 +21,56 @@ void load_idt (IDT* base)
     *limit_ptr = limit;
     asm ("lidt %0" : "=m" (mem48));
 }
+void dummy_wrapper();
+void dummy_isr()
+{
+   asm("dummy_wrapper:");
+   asm("push %eax; push %ecx; push %edx");
+   asm("push %ebx; push %ebp; push %esi; push %edi");
 
+   /*react to the interrupt */
+
+   asm("movb $0x20, %al");
+   asm("outb %al, $0x20");
+   asm("pop %edi; pop %esi; pop %ebp; pop %ebx");
+   asm("pop %edx; pop %ecx; pop %eax");
+   asm("iret");
+}
+
+void error_isr()
+{
+   kprintf("Error ISR\n");
+   while(1);
+}
 
 void init_idt_entry (int intr_no, void (*isr) (void))
 {
+   idt[intr_no].p = 1;
+   idt[intr_no].dpl = 0;
+   idt[intr_no].dt = 0;
+   idt[intr_no].type = 0xE;
+   idt[intr_no].dword_count = 0;
+   idt[intr_no].selector = CODE_SELECTOR;
+   idt[intr_no].unused = TRUE;
+
+   unsigned short lower_offset = 0x0000;
+   unsigned short upper_offset = 0x0000;
+   unsigned short temp = 0x0000;
+   if(16 > intr_no)
+   {
+      lower_offset = (0x0000 | (unsigned) error_isr) & 0xFFFF;
+      temp = ((unsigned) error_isr >> 16) & 0xFFFF;
+      upper_offset = (0x0000 | temp) & 0xFFFF;
+   }
+   else
+   {
+      lower_offset = (0x0000 |(unsigned ) isr) & 0xFFFF;
+      temp = ((unsigned) isr >> 16) & 0xFFFF;
+      upper_offset = (0x0000 |(unsigned) temp) & 0xFFFF;
+   }
+
+   idt[intr_no].offset_0_15 = lower_offset;
+   idt[intr_no].offset_16_31 = upper_offset;
 }
 
 
@@ -156,4 +202,16 @@ void re_program_interrupt_controller ()
 
 void init_interrupts()
 {
+   int i;
+
+   load_idt(idt);
+
+   for(i = 0; i < MAX_INTERRUPTS; i++)
+   {
+      init_idt_entry(i, dummy_isr);
+   }
+
+   re_program_interrupt_controller(); 
+
+   interrupts_initialized = TRUE;
 }

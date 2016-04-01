@@ -60,14 +60,14 @@ void init_idt_entry (int intr_no, void (*isr) (void))
    unsigned short temp = 0x0000;
    if(17 > intr_no)
    {
-      lower_offset = 0xFFFF & (unsigned) error_wrapper;
-      upper_offset = ((unsigned) error_wrapper >> 16) & 0xFFFF;
+      lower_offset = (0x0000 | (unsigned) error_wrapper) & 0xFFFF;
+      upper_offset = (0x0000 | (unsigned) error_wrapper >> 16) & 0xFFFF;
    }
    else
    {
-      lower_offset = 0xFFFF & (unsigned ) isr;
-      temp = ((unsigned) isr >> 16) & 0xFFFF;
-      upper_offset = 0xFFFFF & (unsigned) temp;
+
+      lower_offset = (0x0000 | (unsigned) isr) & 0xFFFF;
+      upper_offset = (0x0000 | (unsigned) isr >> 16) & 0xFFFF;
    }
 
    idt[intr_no].offset_0_15 = lower_offset;

@@ -10,6 +10,12 @@ PORT create_process (void (*ptr_to_new_proc) (PROCESS, PARAM),
 		     PARAM param,
 		     char *name)
 {
+   
+   //For interrupts
+   volatile int saved_if;
+   DISABLE_INTR(saved_if);
+   //end for interrupts
+
    //Look for empty
    int i;
    for(i = 0; i < MAX_PROCS; i++){
@@ -37,6 +43,18 @@ PORT create_process (void (*ptr_to_new_proc) (PROCESS, PARAM),
    esp -= sizeof(LONG);
    poke_l(esp, 0);
    esp -= sizeof(LONG);
+
+   //For interrupts
+   if(interrupts_initialized == TRUE)
+      poke_l(esp, 512);
+   else
+      poke_l(esp, 0);
+   esp -= sizeof(LONG);
+
+   poke_l(esp, CODE_SELECTOR);
+   esp -= sizeof(LONG);
+   //End for interrupts
+
    poke_l(esp, ptr_to_new_proc);
    esp -= sizeof(LONG);
    
@@ -60,6 +78,10 @@ PORT create_process (void (*ptr_to_new_proc) (PROCESS, PARAM),
 
    add_ready_queue(new_proc);
    
+   //For interrupts
+   ENABLE_INTR(saved_if);
+   //End for interrupts
+
    return p;
 }
 

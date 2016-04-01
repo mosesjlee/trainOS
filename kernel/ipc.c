@@ -6,6 +6,11 @@ PORT_DEF ports[MAX_PORTS];
 //Helper function
 PORT allocate_port(PROCESS * owner)
 {
+   //For Interrupts
+   volatile int saved_if;
+   DISABLE_INTR(saved_if);
+   //End for interrupts
+
    PROCESS p = *owner;
 
    assert(p->magic == MAGIC_PCB);
@@ -26,6 +31,9 @@ PORT allocate_port(PROCESS * owner)
 
    p->first_port = &ports[i];
       
+   //For interrupts
+   ENABLE_INTR(saved_if);
+   //End for interrupts
 
    return &ports[i];
 }
@@ -79,6 +87,12 @@ void add_to_blocked_list(PORT * port)
 
 void send (PORT dest_port, void* data)
 {
+   //For Interrupts
+   volatile int saved_if;
+   DISABLE_INTR(saved_if);
+   //End for interrupts
+
+
    PROCESS owner = dest_port->owner;
    assert (owner->magic == MAGIC_PCB);
    assert(dest_port->magic == MAGIC_PORT);
@@ -111,12 +125,23 @@ void send (PORT dest_port, void* data)
    }
 
    remove_ready_queue(active_proc);
+
+   //For interrupts
+   ENABLE_INTR(saved_if);
+   //End for interrupts
+
    resign();
 }
 
 
 void message (PORT dest_port, void* data)
 {
+   //For Interrupts
+   volatile int saved_if;
+   DISABLE_INTR(saved_if);
+   //End for interrupts
+
+
    PROCESS owner = dest_port->owner;
    assert(owner->magic == MAGIC_PCB);
    assert(dest_port->magic == MAGIC_PORT);
@@ -137,6 +162,11 @@ void message (PORT dest_port, void* data)
       active_proc->state = STATE_MESSAGE_BLOCKED;
       remove_ready_queue(active_proc);
    }
+
+   //For interrupts
+   ENABLE_INTR(saved_if);
+   //End for interrupts
+
    resign();
 }
 

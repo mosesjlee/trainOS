@@ -21,6 +21,11 @@ PCB *ready_queue [MAX_READY_QUEUES];
 
 void add_ready_queue (PROCESS proc)
 {
+   //For interrupts
+   volatile int saved_if;
+   DISABLE_INTR(saved_if);
+   //End for interrupts
+
    //Assert
    assert(proc->magic == MAGIC_PCB);
 
@@ -43,6 +48,10 @@ void add_ready_queue (PROCESS proc)
       (*p)->prev->next = proc;
       (*p)->prev = proc;
    }
+
+   //For interrupts
+   ENABLE_INTR(saved_if);
+   //End for interrupts
 }
 
 
@@ -55,6 +64,11 @@ void add_ready_queue (PROCESS proc)
 
 void remove_ready_queue (PROCESS proc)
 {
+   //For interrupts
+   volatile int saved_if;
+   DISABLE_INTR(saved_if);
+   //End for interrupts
+
    //Assert
    assert(proc->magic == MAGIC_PCB);
 
@@ -69,6 +83,11 @@ void remove_ready_queue (PROCESS proc)
       n->prev = proc->prev;
       ready_queue[proc->priority] = n;
    }
+
+   //For interrupts
+   ENABLE_INTR(saved_if);
+   //End for interrupts
+
 }
 
 
@@ -108,6 +127,16 @@ void check_active(){
  */
 void resign()
 {
+   //For interrupts
+   asm("pushfl");
+   asm("cli");
+   asm("popl %eax");
+   asm("xchg (%esp), %eax");
+
+   asm("push %cs");
+   asm("pushl %eax");
+   //End for interrupts
+
    asm("pushl %edi");
    asm("pushl %esi");
    asm("pushl %ebp");
@@ -128,7 +157,9 @@ void resign()
    asm("popl %ebp");
    asm("popl %esi");
    asm("popl %edi");
-   asm("ret");
+
+   //For interrupts
+   asm("iret");
 }
 
 

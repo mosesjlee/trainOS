@@ -57,7 +57,6 @@ void init_idt_entry (int intr_no, void (*isr) (void))
 
    unsigned short lower_offset = 0x0000;
    unsigned short upper_offset = 0x0000;
-   unsigned short temp = 0x0000;
    if(17 > intr_no)
    {
       lower_offset = (0x0000 | (unsigned) error_wrapper) & 0xFFFF;
@@ -83,6 +82,8 @@ void init_idt_entry (int intr_no, void (*isr) (void))
 void isr_timer ();
 void isr_timer_wrapper()
 {
+   asm("isr_timer:");
+   resign();
 }
 
 void isr_timer_impl ()
@@ -209,7 +210,7 @@ void init_interrupts()
 
    for(i = 0; i < MAX_INTERRUPTS; i++)
    {
-      init_idt_entry(i, dummy_isr);
+      init_idt_entry(i, isr_timer);
    }
 
    re_program_interrupt_controller(); 

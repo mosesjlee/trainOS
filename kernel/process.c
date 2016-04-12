@@ -134,14 +134,14 @@ void print_process(WINDOW* wnd, PROCESS p)
    if(active_proc == p)
       activeLabel = '*';
    
-   kprintf("%s %15s %c %5s %d %s\n", state, " ", activeLabel, " ",p->priority, name);
+   kprintf("%s %10s %c %5s %d %s\n", state, " ", activeLabel, " ",p->priority, name);
 
 }
 
 void print_all_processes(WINDOW* wnd)
 {
    //Print out header
-   kprintf("%s %20s %s %s %s\n", "State", " ", "Active", "Prio", "Name");
+   kprintf("%s %10s %s %s %s\n", "State", " ", "Active", "Prio", "Name");
 
    //Print border
    char border[] = "-------------------------------------------------------\n";

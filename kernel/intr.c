@@ -167,6 +167,7 @@ void isr_keyb_impl()
 
 void wait_for_interrupt (int intr_no)
 {
+   PROCESS p = idt[intr_no];
 }
 
 

@@ -57,7 +57,7 @@ void init_idt_entry (int intr_no, void (*isr) (void))
 
    unsigned short lower_offset = 0x0000;
    unsigned short upper_offset = 0x0000;
-   if(17 > intr_no)
+   if(16 > intr_no)
    {
       lower_offset = (0x0000 | (unsigned) error_wrapper) & 0xFFFF;
       upper_offset = (0x0000 | (unsigned) error_wrapper >> 16) & 0xFFFF;
@@ -83,11 +83,29 @@ void isr_timer ();
 void isr_timer_wrapper()
 {
    asm("isr_timer:");
-   resign();
+
+   asm("push %eax; push %ecx; push %edx");
+   asm("push %ebx; push %ebp; push %esi; push %edi");
+
+   asm("movl %%esp, %0" : "=m" (active_proc->esp) :);
+   asm("call isr_timer_impl");
+   asm("movl %0, %%esp" : : "m" (active_proc->esp) :);
+
+   asm("movb $0x20, %al");
+   asm("outb %al, $0x20");
+   asm("pop %edi; pop %esi; pop %ebp; pop %ebx");
+   asm("pop %edx; pop %ecx; pop %eax");
+   asm("iret");
 }
 
 void isr_timer_impl ()
 {
+   PROCESS p = interrupt_table[TIMER_IRQ];
+   if(p && p->state == STATE_INTR_BLOCKED)
+   {
+      add_ready_queue(p);
+   }
+   active_proc = dispatcher();
 }
 
 
@@ -167,7 +185,20 @@ void isr_keyb_impl()
 
 void wait_for_interrupt (int intr_no)
 {
-   PROCESS p = idt[intr_no];
+   volatile int flag;
+   DISABLE_INTR(flag);
+   if(interrupt_table[intr_no] != NULL)
+   {
+      kprintf("Interrupt busy");
+      while(1);
+   }
+   
+   interrupt_table[intr_no] = active_proc;
+   active_proc->state = STATE_INTR_BLOCKED;
+   remove_ready_queue(active_proc);
+   resign();
+   interrupt_table[intr_no] = NULL;
+   ENABLE_INTR(flag);
 }
 
 
@@ -211,10 +242,13 @@ void init_interrupts()
 
    for(i = 0; i < MAX_INTERRUPTS; i++)
    {
-      init_idt_entry(i, isr_timer);
+      init_idt_entry(i, dummy_wrapper);
+      interrupt_table[i] = NULL;
    }
 
-   re_program_interrupt_controller(); 
+   re_program_interrupt_controller();
+
+   init_idt_entry(TIMER_IRQ, isr_timer);
 
    interrupts_initialized = TRUE;
 

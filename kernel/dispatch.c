@@ -6,7 +6,6 @@
 
 PROCESS active_proc;
 
-
 /*
  * Ready queues for all eight priorities.
  */
@@ -61,6 +60,7 @@ void add_ready_queue (PROCESS proc)
  * The process pointed to by p is dequeued from the ready
  * queue.
  */
+
 
 void remove_ready_queue (PROCESS proc)
 {
@@ -136,27 +136,28 @@ void resign()
    asm("push %cs");
    asm("pushl %eax");
    //End for interrupts
-
-   asm("pushl %edi");
-   asm("pushl %esi");
-   asm("pushl %ebp");
-   asm("pushl %ebx");
-   asm("pushl %edx");
-   asm("pushl %ecx");
    asm("pushl %eax");
+   asm("pushl %ecx");
+   asm("pushl %edx");
+   asm("pushl %ebx");
+   asm("pushl %ebp");
+   asm("pushl %esi");
+   asm("pushl %edi");
 
    asm("movl %%esp, %0" : "=r" (active_proc->esp) :);
    active_proc = dispatcher();
    check_active();
    asm("movl %0, %%esp" : : "r" (active_proc->esp));
    
-   asm("popl %eax");
-   asm("popl %ecx");
-   asm("popl %edx");
-   asm("popl %ebx");
-   asm("popl %ebp");
-   asm("popl %esi");
+   
    asm("popl %edi");
+   asm("popl %esi");
+   asm("popl %ebp");
+   asm("popl %ebx");
+   asm("popl %edx");
+   asm("popl %ecx");
+   asm("popl %eax");
+
 
    //For interrupts
    asm("iret");

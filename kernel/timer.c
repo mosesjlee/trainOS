@@ -1,4 +1,3 @@
-
 #include <kernel.h>
 
 
@@ -19,7 +18,7 @@ void timer_notifier(PROCESS self, PARAM param)
    while(42)
    {
       wait_for_interrupt(TIMER_IRQ);
-      send(timer_port, 0);
+      message(timer_port, 0);
    }
 }
 
@@ -32,6 +31,11 @@ void timer_service(PROCESS self, PARAM param)
                   7, 
                   0, 
                   "Timer Notifier");  
+   int i;
+   for(i = 0; i < MAX_PROCS; ++i)
+   {
+      ticks_remaining[i] = 0;
+   }
 
    //Forever Loop
    while(1)
@@ -42,8 +46,6 @@ void timer_service(PROCESS self, PARAM param)
          //register number of ticks client wants to sleep
          int index = sender-pcb;
          ticks_remaining[index] = msg->num_of_ticks;
-         continue;
-         
       }
       else
       {
@@ -52,11 +54,12 @@ void timer_service(PROCESS self, PARAM param)
          for(i = 0; i < MAX_PROCS; ++i)
          {
             //decrement their counter
+            if(ticks_remaining[i] == 0) continue;
+
             --ticks_remaining[i];
             if(ticks_remaining[i] == 0)
             {
                reply(&pcb[i]);
-               ticks_remaining[i] = 0;
             }
          }
       }
@@ -69,10 +72,5 @@ void init_timer ()
                                6,
                                0,
                               "Timer Service");
-   int i;
-   for(i = 0; i < MAX_PROCS; ++i)
-   {
-      ticks_remaining[i] = 0;
-   }
    resign();
 }

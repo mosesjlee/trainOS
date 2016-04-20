@@ -33,11 +33,12 @@ void com_reader_process(PROCESS self, PARAM param);
 void com_process(PROCESS self, PARAM param)
 {
    PROCESS sender;
+   PROCESS recv_proc;
    COM_Message * msg;
 
    com_reader_port = create_process(com_reader_process, 
                                     7,
-                                    0,
+                                    (PARAM) self->first_port,
                                     "Com Reader Process");
 
    while(1){
@@ -45,16 +46,22 @@ void com_process(PROCESS self, PARAM param)
       msg = (COM_Message *) receive(&sender);
 
       //forward message to COM reader process
-      message(com_reader_port, (void *) msg);
+      message(com_reader_port, msg);
 
       //write all bytes contained in COM_Message.output_buffer to COM1
-      memcpy(msg->input_buffer, msg->output_buffer, msg->len_input_buffer);
+      char * c = msg->output_buffer;
+      while(*c != '\0')
+      {
+         while(!(inportb(COM1_PORT + 5) & (1 << 5)));
+         outportb(COM1_PORT, *c);
+         c++;
+      }
 
       //wait for message from COM reader process that signals that all bytes have been read
-      
+      receive(&recv_proc); 
 
       //reply to user process to signal that all I/O has been completed
-      reply(&sender);
+      reply(sender);
 
    }
 }
@@ -62,6 +69,7 @@ void com_process(PROCESS self, PARAM param)
 void com_reader_process(PROCESS self, PARAM param)
 {
    PROCESS sender;
+   PORT reply_port = (PORT) param;
    COM_Message * msg;
 
    while(1)
@@ -70,13 +78,17 @@ void com_reader_process(PROCESS self, PARAM param)
       msg = (COM_Message *) receive(&sender);
 
       //Message contains number of bytes to read into COM_Message.len_input_buffer
+      int i;
 
       //read as many bytes requested from COM1 using wait_for_interrupt(COM1_IRQ) 
       //and importb(COM1_PORT)
-      wait_for_interrupt(COM1_IRQ);
-      
-      while(!(inportb(COM1_PORT +5) & (1 << 5)));
+
+      for(i = 0; i < msg->len_input_buffer; i++){
+         wait_for_interrupt(COM1_IRQ);
+         msg->input_buffer[i] = inportb(COM1_PORT);
+      }
       //send message to COM Process to signal that all bytes have been read
+      message(reply_port, &msg);
    }
 }
 
@@ -101,8 +113,10 @@ void init_uart()
 
 void init_com ()
 {
+   init_uart();
    com_port = create_process(com_process,
-                             5,
+                             6,
                              0,
                              "COM process");
+   resign();
 }

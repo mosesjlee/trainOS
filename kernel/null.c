@@ -2,12 +2,14 @@
 #include <kernel.h>
 
 
-void null_process(PROCESS self, PARAM param)
+void null_process (PROCESS self, PARAM param)
 {
-   while(42);
+    while (42) ;
+    
 }
+
 
 void init_null_process()
 {
-   create_process(null_process, 0, 0, "Null Process");
+    create_process (null_process, 0, 0, "Null process");
 }

@@ -4,36 +4,47 @@
 
 int k_strlen(const char* str)
 {
-   int length = 0;
-
-   while(*str++ != NULL) length++;
-
-   return length;
-
+	int l = 0;
+	while (*str++ != '\0') ++l;
+	return (l);
 }
 
 void* k_memcpy(void* dst, const void* src, int len)
 {
-   char * p1 = (char *) dst;
-   char * p2 = (char *) src;
-   while(len-- != 0){
-      *p1++ = *p2++;
-   }
-
-   return dst;
+	char* cdst = (char*) dst;
+	char* csrc = (char*) src;
+	while (len > 0) {
+		*cdst++ = *csrc++;
+		len--;
+	}
+	return (dst);
 }
 
 int k_memcmp(const void* b1, const void* b2, int len)
 {
+	unsigned char* c1 = (unsigned char*) b1;
+	unsigned char* c2 = (unsigned char*) b2;
+	while (len > 0) {
+		int d = *c1++ - *c2++;
+		if (d != 0) return (d);
+		len--;
+	}
 
-   char * p1 = (char *) b1;
-   char * p2 = (char *) b2;
-   while(len-- != 0){
-      if(*p1 != *p2) return *p1 - *p2;
-      ++p1;
-      ++p2;
+	return (0);
+}
+
+//My own stdlib functions
+int k_strcmp(const char * s1, const char *s2)
+{
+   while(*s1 != '\0' && *s2 != '\0')
+   {
+      int d = *s1++ - *s2++;
+      if(d != 0) return (d);
    }
 
-   return 0;
+   if(*s1 == '\0' && *s2 == '\0')
+      return 0;
+   else
+      return *s1 - *s2;
 }
 

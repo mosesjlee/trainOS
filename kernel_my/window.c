@@ -1,146 +1,106 @@
-
 #include <kernel.h>
 
-
-#define SCREEN_BASE_ADDR 0xb8000
-#define SCREEN_WIDTH     80
-#define SCREEN_HEIGHT    25
-
-
-WORD default_color = 0x0f;
-
-
-
-void poke_screen(int x, int y, WORD ch)
-{
-    poke_w(SCREEN_BASE_ADDR + y * SCREEN_WIDTH * 2 + x * 2, ch);
-}
-
-
-
-WORD peek_screen(int x, int y)
-{
-    return peek_w(SCREEN_BASE_ADDR + y * SCREEN_WIDTH * 2 + x * 2);
-}
-
-
-
-void scroll_window(WINDOW* wnd)
-{
-    int          x, y;
-    int          wx, wy;
-    volatile int flag;
-
-    DISABLE_INTR (flag);
-    for (y = 0; y < wnd->height - 1; y++) {
-	wy = wnd->y + y;
-	for (x = 0; x < wnd->width; x++) {
-	    wx = wnd->x + x;
-	    WORD ch = peek_screen(wx, wy + 1);
-	    poke_screen(wx, wy, ch);
-	}
-    }
-    wy = wnd->y + wnd->height - 1;
-    for (x = 0; x < wnd->width; x++) {
-	wx = wnd->x + x;
-	poke_screen(wx, wy, 0);
-    }
-    wnd->cursor_x = 0;
-    wnd->cursor_y = wnd->height - 1;
-    ENABLE_INTR (flag);
-}
-
+#define WND_ADDR      0xB8000
+#define TXT_ATTR      0x0F00
+#define CURSOR_ATTR   0x8F00
+#define MAX_WT        80
+#define MAX_HT        25
 
 void move_cursor(WINDOW* wnd, int x, int y)
 {
-    assert(x < wnd->width && y < wnd->height);
-    wnd->cursor_x = x;
-    wnd->cursor_y = y;
+   remove_cursor(wnd);
+   wnd->cursor_x = x;
+   wnd->cursor_y = y;
+   show_cursor(wnd);
 }
 
 
 void remove_cursor(WINDOW* wnd)
 {
-    poke_screen(wnd->x + wnd->cursor_x,
-		wnd->y + wnd->cursor_y, ' ');
+   //wnd->cursor_char = ' ';
+   poke_w(WND_ADDR + (wnd->cursor_x + (wnd->cursor_y * wnd->width)) * sizeof(WORD),
+ 		CURSOR_ATTR | wnd->cursor_char);
 }
 
 
 void show_cursor(WINDOW* wnd)
 {
-    poke_screen(wnd->x + wnd->cursor_x,
-		wnd->y + wnd->cursor_y,
-		wnd->cursor_char | (default_color << 8));
+   //wnd->cursor_char = '|';
+   poke_w(WND_ADDR + ((wnd->cursor_x) + (wnd->cursor_y * wnd->width)) * sizeof(WORD),
+ 		CURSOR_ATTR | wnd->cursor_char);
 }
 
 
 void clear_window(WINDOW* wnd)
 {
-    int x, y;
-    int wx, wy;
-
-    volatile int flag;
-
-    DISABLE_INTR (flag);
-    wnd->cursor_x = 0;
-    wnd->cursor_y = 0;
-    for (y = 0; y < wnd->height; y++) {
-	wy = wnd->y + y;
-	for (x = 0; x < wnd->width; x++) {
-	    wx = wnd->x + x;
-	    poke_screen(wx, wy, 0);
-	}
-    }
-    show_cursor(wnd);
-    ENABLE_INTR (flag);
+   int i, j;
+   volatile int flag;
+   DISABLE_INTR(flag);
+   int totalArea = wnd->width * wnd->height;
+   for(i = 0; i < totalArea; i++) {
+      poke_w(WND_ADDR + i * sizeof(WORD), ' ' | TXT_ATTR);
+   }
+   move_cursor(wnd, 0, 0);
+   ENABLE_INTR(flag)
 }
 
 
 void output_char(WINDOW* wnd, unsigned char c)
 {
-    volatile int flag;
+   //Save the address of the window ptr and any offsets
+   WORD * wnd_ptr = WND_ADDR + (wnd->x + wnd->y * MAX_WT) * sizeof(WORD); 
 
-    DISABLE_INTR (flag);
-    remove_cursor(wnd);
-    switch (c) {
-    case '\n':
-    case 13:
-	wnd->cursor_x = 0;
-	wnd->cursor_y++;
-	break;
-    case '\b':
-	if (wnd->cursor_x != 0) {
-	    wnd->cursor_x--;
-	} else {
-	    if (wnd->cursor_y != 0) {
-		wnd->cursor_x = wnd->width - 1;
-		wnd->cursor_y--;
-	    }
-	}
-	break;
-    default:
-	poke_screen(wnd->x + wnd->cursor_x,
-		    wnd->y + wnd->cursor_y,
-		    (short unsigned int) c | (default_color << 8));
-	wnd->cursor_x++;
-	if (wnd->cursor_x == wnd->width) {
-	    wnd->cursor_x = 0;
-	    wnd->cursor_y++;
-	}
-	break;
-    }
-    if (wnd->cursor_y == wnd->height)
-	scroll_window(wnd);
-    show_cursor(wnd);
-    ENABLE_INTR (flag);
+   //Save current location of cursor
+   int c_x = wnd->cursor_x, c_y = wnd->cursor_y;
+
+   //If the cursor is towards the end or person entered a new line
+   if(c_x > wnd->width-1 || c == '\n') {
+      c_x = c == '\n' ? -1 : 0;
+      c_y++;
+      c = c == '\n' ? 0 : c;
+   } 
+      
+   //scrolling feature
+   if(c_y > wnd->height-1) {
+      //Roll back the row counter and bring it back to the left
+      c_y--;
+     
+      //Iterate through the window and copy row below to above 
+      int i, j;
+
+      //References to the destination and source
+      WORD * dest = wnd_ptr, * source;
+      for(j = 1; j < wnd->height; j++){
+         source = WND_ADDR + (wnd->x + (wnd->y + j) * MAX_WT) * sizeof(WORD);
+         for(i = 0; i < wnd->width; i++) {
+            *dest++ = *source++;
+         }
+         //Set the destination to the beginning of source
+         dest = source - wnd->width;
+      }
+  
+      //Blank out the last line
+      source = WND_ADDR + (wnd->x + (wnd->y + wnd->height-1) * MAX_WT) * sizeof(WORD);
+      for(i = 0; i < wnd->width; i++) {
+         poke_w(source++, ' ' | TXT_ATTR);
+      }
+   } 
+
+   //Calculate offset from the base address
+   int offSet = c_x + (c_y * MAX_WT);
+
+   //Move cursor up one
+   move_cursor(wnd, c_x+1, c_y);
+
+   //Write to screen
+   poke_w(&wnd_ptr[offSet], c | TXT_ATTR);
 }
-
-
 
 void output_string(WINDOW* wnd, const char *str)
 {
-    while (*str != '\0')
-	output_char(wnd, *str++);
+   while(*str != NULL){
+      output_char(wnd, *str++);
+  }
 }
 
 

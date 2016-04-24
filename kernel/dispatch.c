@@ -6,10 +6,19 @@
 
 PROCESS active_proc;
 
+
 /*
  * Ready queues for all eight priorities.
  */
 PCB *ready_queue [MAX_READY_QUEUES];
+
+/*
+ * The bits in ready_procs tell which ready queue is empty.
+ * The MSB of ready_procs corresponds to ready_queue[7].
+ */
+unsigned ready_procs;
+
+
 
 /*
  * add_ready_queue
@@ -20,38 +29,29 @@ PCB *ready_queue [MAX_READY_QUEUES];
 
 void add_ready_queue (PROCESS proc)
 {
-   //For interrupts
-   volatile int saved_if;
-   DISABLE_INTR(saved_if);
-   //End for interrupts
-
-   //Assert
-   assert(proc->magic == MAGIC_PCB);
-
-   //Set it to ready
-   proc->state = STATE_READY;
-
-   //Pointer to a pointer
-   PROCESS * p = &ready_queue[proc->priority];
-
-   //If there are no processes at that priority
-   if(ready_queue[proc->priority] == NULL){
-      *p = proc;
-      proc->prev = proc;
-      proc->next = proc;
-   }
-   //If there are/is process(es)
-   else {
-      proc->next = *p;
-      proc->prev = (*p)->prev;
-      (*p)->prev->next = proc;
-      (*p)->prev = proc;
-   }
-
-   //For interrupts
-   ENABLE_INTR(saved_if);
-   //End for interrupts
+    int          prio;
+    volatile int flag;
+    
+    DISABLE_INTR (flag);
+    assert (proc->magic == MAGIC_PCB);
+    prio = proc->priority;
+    if (ready_queue [prio] == NULL) {
+	/* The only process on this priority level */
+	ready_queue [prio] = proc;
+	proc->next         = proc;
+	proc->prev 	   = proc;
+	ready_procs |= 1 << prio;
+    } else {
+	/* Some other processes on this priority level */
+	proc->next  = ready_queue [prio];
+	proc->prev  = ready_queue [prio]->prev;
+	ready_queue [prio]->prev->next = proc;
+	ready_queue [prio]->prev       = proc;
+    }
+    proc->state = STATE_READY;
+    ENABLE_INTR (flag);
 }
+
 
 
 /*
@@ -61,33 +61,24 @@ void add_ready_queue (PROCESS proc)
  * queue.
  */
 
-
 void remove_ready_queue (PROCESS proc)
 {
-   //For interrupts
-   volatile int saved_if;
-   DISABLE_INTR(saved_if);
-   //End for interrupts
-
-   //Assert
-   assert(proc->magic == MAGIC_PCB);
-
-   //If there is only one process all the pointers should point to itself
-   if(ready_queue[proc->priority]->next == proc && ready_queue[proc->priority] == proc) {
-      ready_queue[proc->priority] = NULL;
-   }
-   //For all other scenarios
-   else {
-      PROCESS n = proc->next;
-      proc->prev->next = n;
-      n->prev = proc->prev;
-      ready_queue[proc->priority] = n;
-   }
-
-   //For interrupts
-   ENABLE_INTR(saved_if);
-   //End for interrupts
-
+    int          prio;
+    volatile int flag;
+    
+    DISABLE_INTR (flag);
+    assert (proc->magic == MAGIC_PCB);
+    prio = proc->priority;
+    if (proc->next == proc) {
+	/* No further processes on this priority level */
+	ready_queue [prio] = NULL;
+	ready_procs &= ~(1 << prio);
+    } else {
+	ready_queue [prio] = proc->next;
+	proc->next->prev   = proc->prev;
+	proc->prev->next   = proc->next;
+    }
+    ENABLE_INTR (flag);
 }
 
 
@@ -102,20 +93,26 @@ void remove_ready_queue (PROCESS proc)
 
 PROCESS dispatcher()
 {
-
-   int i;
-   for(i = MAX_READY_QUEUES - 1; i >= 0; i--){
-      if(ready_queue[i] != NULL){
-         PROCESS p = ready_queue[i];
-         ready_queue[i] = p->next;
-         return p;
-      }
-   }
+    PROCESS      new_proc;
+    unsigned     i;
+    volatile int flag;
+    
+    DISABLE_INTR (flag);
+    
+    /* Find queue with highest priority that is not empty */
+    i = table[ready_procs];
+    assert (i != -1);
+    if (i == active_proc->priority)
+	/* Round robin within the same priority level */
+	new_proc = active_proc->next;
+    else
+	/* Dispatch a process at a different priority level */
+	new_proc = ready_queue [i];
+    ENABLE_INTR (flag);
+    return new_proc;
 }
 
-void check_active(){
-   assert(active_proc != NULL);
-}
+
 
 /*
  * resign
@@ -127,40 +124,48 @@ void check_active(){
  */
 void resign()
 {
-   //For interrupts
-   asm("pushfl");
-   asm("cli");
-   asm("popl %eax");
-   asm("xchg (%esp), %eax");
+    /*
+     *	PUSHFL
+     *	CLI
+     *	POPL	%EAX		; EAX = Flags
+     *	XCHGL	(%ESP),%EAX     ; Swap return adr with flags
+     *	PUSH	%CS 		; Push CS
+     *	PUSHL	%EAX		; Push return address
+     *  PUSHL	%EAX		; Save process' context
+     *  PUSHL   %ECX
+     *  PUSHL   %EDX
+     *  PUSHL   %EBX
+     *  PUSHL   %EBP
+     *  PUSHL   %ESI
+     *  PUSHL   %EDI
+     */
+    asm ("pushfl;cli;popl %eax;xchgl (%esp),%eax");
+    asm ("push %cs;pushl %eax");
+    asm ("pushl %eax;pushl %ecx;pushl %edx");
+    asm ("pushl %ebx;pushl %ebp;pushl %esi;pushl %edi");
 
-   asm("push %cs");
-   asm("pushl %eax");
-   //End for interrupts
-   asm("pushl %eax");
-   asm("pushl %ecx");
-   asm("pushl %edx");
-   asm("pushl %ebx");
-   asm("pushl %ebp");
-   asm("pushl %esi");
-   asm("pushl %edi");
+    /* Save the context pointer SS:ESP to the PCB */
+    asm ("movl %%esp,%0" : "=r" (active_proc->esp) : );
 
-   asm("movl %%esp, %0" : "=r" (active_proc->esp) :);
-   active_proc = dispatcher();
-   check_active();
-   asm("movl %0, %%esp" : : "r" (active_proc->esp));
-   
-   
-   asm("popl %edi");
-   asm("popl %esi");
-   asm("popl %ebp");
-   asm("popl %ebx");
-   asm("popl %edx");
-   asm("popl %ecx");
-   asm("popl %eax");
+    /* Dispatch new process */
+    active_proc = dispatcher();
 
-
-   //For interrupts
-   asm("iret");
+    /* Restore context pointer SS:ESP */
+    asm ("movl %0,%%esp" : : "r" (active_proc->esp));
+    
+    /*
+     *  POPL  %EDI      ; Restore previously saved context
+     *  POPL  %ESI
+     *  POPL  %EBP
+     *  POPL  %EBX
+     *  POPL  %EDX
+     *  POPL  %ECX
+     *  POPL  %EAX
+     *	IRET		; Return to new process
+     */
+    asm ("popl %edi;popl %esi;popl %ebp;popl %ebx");
+    asm ("popl %edx;popl %ecx;popl %eax");
+    asm ("iret");
 }
 
 
@@ -173,12 +178,13 @@ void resign()
 
 void init_dispatcher()
 {
-   //null out the pointers
-   int i;
-   for(i = 0; i < MAX_READY_QUEUES; ++i){
-      ready_queue[i] = NULL;
-   }
+    int i;
 
-   //Adds the boot process to the ready queue
-   add_ready_queue(active_proc);
+    for (i = 0; i < MAX_READY_QUEUES; i++)
+	ready_queue [i] = NULL;
+
+    ready_procs = 0;
+    
+    /* Setup first process */
+    add_ready_queue (active_proc);
 }

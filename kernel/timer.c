@@ -1,76 +1,59 @@
+
 #include <kernel.h>
 
 
 PORT timer_port;
 
-int ticks_remaining[MAX_PROCS];
+void timer_notifier (PROCESS self, PARAM param)
+{
+    while (42) {
+	wait_for_interrupt (TIMER_IRQ);
+	message (timer_port, 0);
+    }
+}
+
+void timer_process (PROCESS self, PARAM param)
+{
+    int            ticks_left[MAX_PROCS];
+    Timer_Message* msg;
+    PROCESS        sender;
+    int            i;
+
+    for (i = 0; i < MAX_PROCS; i++)
+	ticks_left[i] = 0;
+    
+    create_process(timer_notifier, 7, 0, "Timer notifier");
+
+    while (42) {
+	msg = (Timer_Message*) receive(&sender);
+	if (msg == NULL) {
+	    // The timer notifier sent us a message
+	    for (i = 0; i < MAX_PROCS; i++) {
+		if (ticks_left[i] == 0) continue;
+		if (--ticks_left[i] == 0) {
+		    // Wake up client
+		    reply(&pcb[i]);
+		}
+	    }
+	} else {
+	    // A client sent us a message
+	    i = sender - pcb;
+	    ticks_left[i] = msg->num_of_ticks;
+	}
+    }
+}
 
 
 void sleep(int ticks)
 {
-   Timer_Message msg;
-   msg.num_of_ticks = ticks;
-   send(timer_port, &msg);
+    Timer_Message msg;
+    msg.num_of_ticks = ticks;
+    send(timer_port, &msg);
 }
 
-void timer_notifier(PROCESS self, PARAM param)
-{
-   while(42)
-   {
-      wait_for_interrupt(TIMER_IRQ);
-      message(timer_port, 0);
-   }
-}
-
-void timer_service(PROCESS self, PARAM param)
-{
-   PROCESS sender;
-   Timer_Message * msg;
-   //Create the timer notifier
-   create_process(timer_notifier, 
-                  7, 
-                  0, 
-                  "Timer Notifier");  
-   int i;
-   for(i = 0; i < MAX_PROCS; ++i)
-   {
-      ticks_remaining[i] = 0;
-   }
-
-   //Forever Loop
-   while(1)
-   {
-      msg = (Timer_Message *) receive(&sender);
-      if(msg != NULL)
-      {
-         //register number of ticks client wants to sleep
-         int index = sender-pcb;
-         ticks_remaining[index] = msg->num_of_ticks;
-      }
-      else
-      {
-         //Message from timer notifier
-         int i;
-         for(i = 0; i < MAX_PROCS; ++i)
-         {
-            //decrement their counter
-            if(ticks_remaining[i] == 0) continue;
-
-            --ticks_remaining[i];
-            if(ticks_remaining[i] == 0)
-            {
-               reply(&pcb[i]);
-            }
-         }
-      }
-   }
-}
 
 void init_timer ()
 {
-   timer_port = create_process(timer_service, 
-                               6,
-                               0,
-                              "Timer Service");
-   resign();
+    timer_port = create_process (timer_process, 6, 0, "Timer process");
+    resign();
 }

@@ -48,3 +48,14 @@ int k_strcmp(const char * s1, const char *s2)
       return *s1 - *s2;
 }
 
+int k_atoi(const char * s)
+{
+   int res = 0;
+
+   while(*s != '\0')
+   {
+      res = res * 10 + *s++ - '0';
+   }
+
+   return res;
+}

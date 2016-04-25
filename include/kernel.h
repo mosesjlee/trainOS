@@ -21,7 +21,10 @@ typedef int BOOL;
 int k_strlen(const char* str);
 void* k_memcpy(void* dst, const void* src, int len);
 int k_memcmp(const void* b1, const void* b2, int len);
+
+/*=====>>> My functions <<<=================================================*/
 int k_strcmp(const char * s1, const char * s2);
+int k_atoi(const char * s);
 
 
 /*=====>>> mem.c <<<========================================================*/

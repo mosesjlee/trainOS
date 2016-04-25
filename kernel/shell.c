@@ -49,7 +49,7 @@ void print_help_menu(const char * flags)
    output_string(&shell_wnd, "clear   ------- Clears window\n");
    output_string(&shell_wnd, "about   ------- Credits and License\n");
    output_string(&shell_wnd, "ps      ------- Print current processes\n");
-   output_string(&shell_wnd, "pacman  ------- Runs pacman simulation\n");
+   output_string(&shell_wnd, "pacman  ------- Runs pacman game. Pass -h for more options\n");
    output_string(&shell_wnd, "train   ------- Runs train app. Pass -h for more options\n");
 }
 
@@ -65,13 +65,137 @@ void print_credits(const char * flags)
 
 }
 
+//Helper function for processing flags and options
+void process_flags(const char * flags, 
+                   char * flag_options, 
+                   char * flag_values, 
+                   int flag_char_count)
+{
+   clear_buf(flag_options, 8);
+   clear_buf(flag_values, 8);
+
+   int i, collect_value = FALSE, option_cnt = 0, value_cnt = 0;
+   for(i = 0; i < flag_char_count; i++)
+   {
+      if(flags[i] == ' ' || flags[i] == (char) 0)
+      {
+         collect_value = TRUE;
+      }
+      else if(flags[i] != ' ' && collect_value == TRUE)
+      {
+         flag_values[value_cnt++] = flags[i];
+      }
+      else
+      {
+         flag_options[option_cnt++] = flags[i];
+      }
+   }
+
+#if DEBUG
+   kprintf("option count %d flag_char_count: %d\n", option_cnt, flag_char_count);
+#endif
+
+   flag_values[value_cnt] = '\0';
+   flag_options[option_cnt] = '\0';
+}
+
 //Prepares Train commands
 void relay_train_commands(const char * flags, int flag_char_count)
 {
 
-   output_string(&shell_wnd, "Train filler\n");
+   static char * flag_list[] = {
+                                 "h",
+                                 "mf",
+                                 "mb",
+                                 "stop",
+                                 "init",
+                                 "sim"
+                               };
+
+   char stripped_flags[9];
+   char flag_value[9];
+
+   process_flags(flags, stripped_flags, flag_value, flag_char_count); 
+
+#if DEBUG
+   print_current_cmd(stripped_flags, 8);
+   kprintf("%s --- %s\n", stripped_flags, flag_list[0]);
+#endif
+
+   //Begin Train commands
+   if(0 == k_strcmp(stripped_flags, flag_list[0]))
+   {
+      output_string(&shell_wnd, "----------------- Welcome to Train -----------------\n");  
+      output_string(&shell_wnd, "-h      ------- For available options.\n");  
+      output_string(&shell_wnd, "-mf [s] ------- Move train forward at Speed [s]\n");  
+      output_string(&shell_wnd, "-mb [s] ------- Move train backward at Speed [s]\n");  
+      output_string(&shell_wnd, "-stop   ------- Stop train\n");  
+      output_string(&shell_wnd, "-init   ------- Start train process\n");
+      output_string(&shell_wnd, "-sim    ------- Start train simulation\n");
+   }
+   else if(0 == k_strcmp(stripped_flags, flag_list[1]))
+   {
+   }
+   else if(0 == k_strcmp(stripped_flags, flag_list[2]))
+   {
+   }
+   else if(0 == k_strcmp(stripped_flags, flag_list[3]))
+   {
+   }
+   else if(0 == k_strcmp(stripped_flags, flag_list[4]))
+   {
+   }
+   else if(0 == k_strcmp(stripped_flags, flag_list[5]))
+   {
+   }
+   else
+   {
+      output_string(&shell_wnd, "Invalid train options. Pass -h for usage\n");
+   }
 }
 
+//Start the pacman game with number of ghost user specifies
+void start_pacman_game(const char * flags, int flag_char_count)
+{
+   static char * option_list[] = {
+                                  "h",
+                                  "g",
+                                  "d"
+                                 };
+   char stripped_flags[9];
+   char flag_value[9];
+
+   process_flags(flags, stripped_flags, flag_value, flag_char_count); 
+
+
+   if(0 == k_strcmp(stripped_flags, option_list[0]))
+   {
+      output_string(&shell_wnd, "---------------- Welcome to Pacman ----------------\n");  
+      output_string(&shell_wnd, "-h     ------ For available options.\n");  
+      output_string(&shell_wnd, "-g [n] ------ Init pacman with [n] ghosts. Max 4.\n");  
+      output_string(&shell_wnd, "-d     ------ Init pacman with default 4 ghosts.\n");  
+   }
+   else if(0 == k_strcmp(stripped_flags, option_list[1]))
+   {
+      int num_ghosts = k_atoi(flag_value);
+      if(num_ghosts > 4)
+      {
+         output_string(&shell_wnd, "Number of ghosts exceeded\n");
+      }
+      else
+      {
+         init_pacman(&pac_wnd, num_ghosts);
+      }
+   }
+   else if(0 == k_strcmp(stripped_flags, option_list[2]))
+   {
+      init_pacman(&pac_wnd, 4);
+   }
+   else
+   {
+      output_string(&shell_wnd, "Invalid pacman options. Pass -h for usage\n");
+   }
+}
 
 
 //Strips of all unnecessary characters and executes commands based on list of commands
@@ -107,7 +231,6 @@ void execute_command(char * cmd, int char_count)
       if(cmd[i] == '-')
       {
          flags_found = TRUE;
-         flag_count++;
       }
       else
       {
@@ -141,35 +264,38 @@ void execute_command(char * cmd, int char_count)
    } 
    else if(0 == k_strcmp(stripped_cmd, function_list[1]))
    {
+      //Prints credits
       print_credits(flags);
    }
    else if(0 == k_strcmp(stripped_cmd, function_list[2]))
    {
-      if(flag_count != 0)
+      //Clears the window. If flag is passed, it is an invalid option
+      if(flags_found != FALSE)
          output_string(&shell_wnd, "Invalid option\n");
       else
          clear_window(&shell_wnd);
    }
    else if(0 == k_strcmp(stripped_cmd, function_list[3]))
    {
-      if(flag_count != 0)
+      //Prints all current processes. If flag is passed, it is an invalid option
+      if(flags_found != FALSE)
          output_string(&shell_wnd, "Invalid option\n");
       else
          print_all_processes(&shell_wnd);
    }
    else if(0 == k_strcmp(stripped_cmd, function_list[4]))
    {
-      if(flag_count != 0)
-         output_string(&shell_wnd, "Invalid option\n");
-      else
-         init_pacman(&pac_wnd, 2);
+      //Start the pacman game
+      start_pacman_game(flags, flag_count);
    }
    else if(0 == k_strcmp(stripped_cmd, function_list[5]))
    {
+      //Start train programs
       relay_train_commands(flags, flag_count);
    }
    else
    {
+      //Command not found
       output_string(&shell_wnd, "Command not found\n");
    }
 }
@@ -222,6 +348,8 @@ void shell_process(PROCESS self, PARAM param)
             char_count--;
 
             break;
+            
+         //For all other characters add it to the command buffer
          default:
             if(char_count >= MAX_BUF_COM) break;
             modify_buffer_at_index(curr_char, command, char_count);

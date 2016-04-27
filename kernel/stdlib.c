@@ -51,11 +51,17 @@ int k_strcmp(const char * s1, const char *s2)
 int k_atoi(const char * s)
 {
    int res = 0;
-
+   int negative = 1;
+   if(s[0] == '-') 
+   {
+      negative = -1;
+      s++;
+   }
    while(*s != '\0')
    {
+      if(*s < '0' || *s > '9') return res * negative;
       res = res * 10 + *s++ - '0';
    }
 
-   return res;
+   return res * negative;
 }

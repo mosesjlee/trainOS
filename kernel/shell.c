@@ -5,11 +5,13 @@
 #define MAX_BUF_COM   60
 #define MAX_FLAG_CHAR 16
 #define DEBUG 0
+#define TURN_IN_MODE 0
 
 WINDOW shell_wnd  = {0, 9, 61, 16, 0, 0, 0xDC};
 WINDOW pac_wnd = {61, 9, 19, 16, 0, 0, 0xDC};
 
 //Helper debug function
+/*****>>> Below are my helper functions <<<********************/
 void print_current_cmd(char * cmd, int count)
 {
    int i;
@@ -27,9 +29,7 @@ void clear_buf(char * com, int char_count)
 {
    int i;
    for(i = 0; i < char_count; i++)
-   {
       com[i] = (char) 0;
-   }
 }
 
 //Modifies the character buffer as needed
@@ -40,6 +40,47 @@ void modify_buffer_at_index(char c, char * buf, int index)
 
    buf[index] = c;
 }
+
+//I included this in my own stdlib.c, but for turn in include these for compiling
+#if TURN_IN_MODE
+//My own string compare
+int k_strcmp(const char * s1, const char *s2)
+{
+   while(*s1 != '\0' && *s2 != '\0')
+   {
+      int d = *s1++ - *s2++;
+      if(d != 0) return (d);
+   }
+
+   if(*s1 == '\0' && *s2 == '\0')
+      return 0;
+   else
+      return *s1 - *s2;
+}
+
+//My own atoi
+int k_atoi(const char * s)
+{
+   int res = 0;
+   int negative = 1;
+   if(s[0] == '-') 
+   {
+      negative = -1;
+      s++;
+   }
+   while(*s != '\0')
+   {
+      if(*s < '0' || *s > '9') return res * negative;
+      res = res * 10 + *s++ - '0';
+   }
+
+   return res * negative;
+}
+#endif
+
+
+/********>>>>>>>>>>Above are my helper functions <<<<<<<<<<<<<<<<*********/
+
 
 //Function that prints out all the help options
 void print_help_menu(const char * flags)
@@ -71,9 +112,11 @@ void process_flags(const char * flags,
                    char * flag_values, 
                    int flag_char_count)
 {
+   //Clear the buffer
    clear_buf(flag_options, 8);
    clear_buf(flag_values, 8);
 
+   //Parse through the flag options for the flag and its value if it has one
    int i, collect_value = FALSE, option_cnt = 0, value_cnt = 0;
    for(i = 0; i < flag_char_count; i++)
    {
@@ -94,7 +137,7 @@ void process_flags(const char * flags,
 #if DEBUG
    kprintf("option count %d flag_char_count: %d\n", option_cnt, flag_char_count);
 #endif
-
+   //Null terminating at the end
    flag_values[value_cnt] = '\0';
    flag_options[option_cnt] = '\0';
 }
@@ -105,17 +148,16 @@ void relay_train_commands(const char * flags, int flag_char_count)
 
    static char * flag_list[] = {
                                  "h",
-                                 "mf",
-                                 "mb",
-                                 "stop",
-                                 "init",
-                                 "sim"
+                                 "m",
+                                 "r",
+                                 "t",
+                                 "init"
                                };
-
+   COM_Message msg;
    char stripped_flags[9];
    char flag_value[9];
-
    process_flags(flags, stripped_flags, flag_value, flag_char_count); 
+
 
 #if DEBUG
    print_current_cmd(stripped_flags, 8);
@@ -126,27 +168,63 @@ void relay_train_commands(const char * flags, int flag_char_count)
    if(0 == k_strcmp(stripped_flags, flag_list[0]))
    {
       output_string(&shell_wnd, "----------------- Welcome to Train -----------------\n");  
-      output_string(&shell_wnd, "-h      ------- For available options.\n");  
-      output_string(&shell_wnd, "-mf [s] ------- Move train forward at Speed [s]\n");  
-      output_string(&shell_wnd, "-mb [s] ------- Move train backward at Speed [s]\n");  
-      output_string(&shell_wnd, "-stop   ------- Stop train\n");  
-      output_string(&shell_wnd, "-init   ------- Start train process\n");
-      output_string(&shell_wnd, "-sim    ------- Start train simulation\n");
+      output_string(&shell_wnd, "-h          ------- For available options.\n");  
+      output_string(&shell_wnd, "-m [s]      ------- Move train at Speed [s]\n");  
+      output_string(&shell_wnd, "-r          ------- Reverse direction of train\n");  
+      output_string(&shell_wnd, "-t [n][r/g] ------- Change track [n] to color[r/g]. i.e. 5G\n");  
+      output_string(&shell_wnd, "-init       ------- Start train process\n");
    }
    else if(0 == k_strcmp(stripped_flags, flag_list[1]))
    {
+      //Move train at specified speed
+      if(5 < k_atoi(flag_value) || k_atoi(flag_value) < 0)
+         output_string(&shell_wnd, "Speed must be a value between 0 and 5\n");
+      else
+      {
+         msg.output_buffer = "L20S5\015\0";
+         msg.output_buffer[4] = flag_value[0];
+         send(com_port, &msg);
+      }
    }
    else if(0 == k_strcmp(stripped_flags, flag_list[2]))
    {
+      //Reverse the direction of train
+      msg.output_buffer = "L20D\015\0";
+      send(com_port, &msg);
    }
    else if(0 == k_strcmp(stripped_flags, flag_list[3]))
    {
+      //Change track
+      char track[] = "MNC\015";
+
+      //Check to see if track number is within range
+      if(9 < k_atoi(&flag_value[0]) || k_atoi(&flag_value[0]) < 1)
+      {
+         output_string(&shell_wnd, "Track number must be between 1 and 9\n");
+         return;
+      }
+      
+      //Check to see if the route change is valid
+      if((flag_value[1] != 'g' && flag_value[1] != 'G') &&
+         (flag_value[1] != 'r' && flag_value[1] != 'R'))
+      {
+         output_string(&shell_wnd, "Not a valid track route\n");
+         return;
+      }
+      
+      //Set the track number
+      track[1] = flag_value[0];
+
+      //To accept both lower case and upper case arguments
+      track[2] = (flag_value[1] < 91 ) ? flag_value[1] : flag_value[1] - 32;
+
+      //Set the message buffer and send
+      msg.output_buffer = track;
+      send(com_port, &msg);
    }
    else if(0 == k_strcmp(stripped_flags, flag_list[4]))
    {
-   }
-   else if(0 == k_strcmp(stripped_flags, flag_list[5]))
-   {
+      //Initialize the train process
    }
    else
    {
@@ -170,6 +248,7 @@ void start_pacman_game(const char * flags, int flag_char_count)
 
    if(0 == k_strcmp(stripped_flags, option_list[0]))
    {
+      //Print out help for pacman
       output_string(&shell_wnd, "---------------- Welcome to Pacman ----------------\n");  
       output_string(&shell_wnd, "-h     ------ For available options.\n");  
       output_string(&shell_wnd, "-g [n] ------ Init pacman with [n] ghosts. Max 4.\n");  
@@ -177,22 +256,22 @@ void start_pacman_game(const char * flags, int flag_char_count)
    }
    else if(0 == k_strcmp(stripped_flags, option_list[1]))
    {
+      //Initialize pacman with user specified number of ghost
+      //Max 4 ghosts
       int num_ghosts = k_atoi(flag_value);
       if(num_ghosts > 4)
-      {
          output_string(&shell_wnd, "Number of ghosts exceeded\n");
-      }
       else
-      {
          init_pacman(&pac_wnd, num_ghosts);
-      }
    }
    else if(0 == k_strcmp(stripped_flags, option_list[2]))
    {
+      //Default start pacman with 4 ghosts
       init_pacman(&pac_wnd, 4);
    }
    else
    {
+      //If the passed wrong flags
       output_string(&shell_wnd, "Invalid pacman options. Pass -h for usage\n");
    }
 }

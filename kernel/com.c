@@ -44,6 +44,7 @@ void com_reader_process (PROCESS self, PARAM param)
 	msg = (COM_Message*) receive (&sender_proc);
 	i = 0;
 	while (i != msg->len_input_buffer) {
+
 	    wait_for_interrupt (COM1_IRQ);
 	    msg->input_buffer[i++] = inportb (COM1_PORT);
 	}
@@ -82,6 +83,7 @@ void com_process (PROCESS self, PARAM param)
 	send_cmd_to_com (msg->output_buffer);
 	receive (&recv_proc);
 	/*assert (recv_proc == com_reader_proc);*/
+
 	reply (sender_proc);
     }
 }

@@ -9,6 +9,7 @@
 
 WINDOW shell_wnd  = {0, 9, 61, 16, 0, 0, 0xDC};
 WINDOW pac_wnd = {61, 9, 19, 16, 0, 0, 0xDC};
+extern WINDOW train_wnd;
 
 //Helper debug function
 /*****>>> Below are my helper functions <<<********************/
@@ -120,14 +121,17 @@ void process_flags(const char * flags,
    int i, collect_value = FALSE, option_cnt = 0, value_cnt = 0;
    for(i = 0; i < flag_char_count; i++)
    {
+      //If there is a space detected, then start collecting arguments for the flags
       if(flags[i] == ' ' || flags[i] == (char) 0)
       {
          collect_value = TRUE;
       }
+      //Collect values for the specified flags
       else if(flags[i] != ' ' && collect_value == TRUE)
       {
          flag_values[value_cnt++] = flags[i];
       }
+      //Collect characters of the flag
       else
       {
          flag_options[option_cnt++] = flags[i];
@@ -136,7 +140,9 @@ void process_flags(const char * flags,
 
 #if DEBUG
    kprintf("option count %d flag_char_count: %d\n", option_cnt, flag_char_count);
+   print_current_cmd(flag_options, option_cnt);
 #endif
+
    //Null terminating at the end
    flag_values[value_cnt] = '\0';
    flag_options[option_cnt] = '\0';
@@ -153,16 +159,14 @@ void relay_train_commands(const char * flags, int flag_char_count)
                                  "t",
                                  "init"
                                };
+
    COM_Message msg;
+   char buffer[12];
+   msg.input_buffer = buffer; msg.len_input_buffer = 0;
    char stripped_flags[9];
    char flag_value[9];
    process_flags(flags, stripped_flags, flag_value, flag_char_count); 
 
-
-#if DEBUG
-   print_current_cmd(stripped_flags, 8);
-   kprintf("%s --- %s\n", stripped_flags, flag_list[0]);
-#endif
 
    //Begin Train commands
    if(0 == k_strcmp(stripped_flags, flag_list[0]))
@@ -181,7 +185,7 @@ void relay_train_commands(const char * flags, int flag_char_count)
          output_string(&shell_wnd, "Speed must be a value between 0 and 5\n");
       else
       {
-         msg.output_buffer = "L20S5\015\0";
+         msg.output_buffer = "L20S5\015";
          msg.output_buffer[4] = flag_value[0];
          send(com_port, &msg);
       }
@@ -225,6 +229,7 @@ void relay_train_commands(const char * flags, int flag_char_count)
    else if(0 == k_strcmp(stripped_flags, flag_list[4]))
    {
       //Initialize the train process
+      init_train(&train_wnd);
    }
    else
    {
@@ -304,7 +309,7 @@ void execute_command(char * cmd, int char_count)
    for(i = 0; i < char_count; i++)
    {
       //Space ignore
-      if(cmd[i] == ' ') continue;
+      if(cmd[i] == ' ' && flags_found != TRUE) continue;
       
       //If a '-' is found, beginning of flag
       if(cmd[i] == '-')
@@ -316,14 +321,14 @@ void execute_command(char * cmd, int char_count)
          //If flags are not set then keep collecting character for commands
          if(flags_found != TRUE)
          {
-            stripped_cmd[cmd_count++] = cmd[i];
             if(cmd_count >= MAX_BUF_COM-1) break;
+            stripped_cmd[cmd_count++] = cmd[i];
          }
          //If flags are set then collect characters for the optional flags
          else
          {
+            if(flag_count >= MAX_FLAG_CHAR) break;
             flags[flag_count++] = cmd[i];
-            if(flag_count++ >= MAX_FLAG_CHAR) break;
          }
       }
    }
@@ -333,6 +338,7 @@ void execute_command(char * cmd, int char_count)
 #if DEBUG
    kprintf("char_count: %d Count: %d\n", char_count, cmd_count);
    print_current_cmd(stripped_cmd, cmd_count);
+   print_current_cmd(flags, flag_count);
 #endif
 
    //Determine which command to run
@@ -412,10 +418,6 @@ void shell_process(PROCESS self, PARAM param)
             
             clear_buf(command, MAX_BUF_COM);
             char_count = 0;
-
-#if DEBUG
-            print_current_cmd(command, char_count);
-#endif
             break;
            
          //Handle backspace characters
@@ -425,7 +427,6 @@ void shell_process(PROCESS self, PARAM param)
             modify_buffer_at_index((char) 0, command, char_count);
             output_char(&shell_wnd, curr_char);
             char_count--;
-
             break;
             
          //For all other characters add it to the command buffer
@@ -442,7 +443,7 @@ void shell_process(PROCESS self, PARAM param)
 void init_shell()
 {
    create_process(shell_process,
-                  7,
+                  5,
                   0,
                   "Shell Process");
    resign();

@@ -402,7 +402,7 @@ void shell_process(PROCESS self, PARAM param)
    {
       //Read command from keyboard
       send(keyb_port, &msg);
-      
+
       char curr_char = *msg.key_buffer;
 
       switch(curr_char){
@@ -443,7 +443,7 @@ void shell_process(PROCESS self, PARAM param)
 void init_shell()
 {
    create_process(shell_process,
-                  5,
+                  3,
                   0,
                   "Shell Process");
    resign();

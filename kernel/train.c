@@ -53,9 +53,6 @@ void send_message_to_train(const char * command,
                            const unsigned int response_length,
                            const unsigned int sleep_time)
 {
-   //Ensure 15 tick interval
-   sleep(sleep_time);
-   
    COM_Message msg;
    msg.output_buffer = command;
    msg.input_buffer = response;
@@ -63,6 +60,9 @@ void send_message_to_train(const char * command,
 
    //Send the message
    send(com_port, &msg);
+
+   //Ensure 15 tick interval
+   sleep(sleep_time);
 }
 
 /*
@@ -106,6 +106,13 @@ void run_config_1()
    //Response buffer
    char buffer[3] = {' ', ' ', ' '};
 
+   char * right_loop[] = {"M1R\015", "M2R\015", "M7R\015", "M8R\015"};
+   if(zamboni)
+   {
+      send_sequential_commands(right_loop, 4);
+      poll_track(buffer, 3, 25, "C14\015");
+   }
+
    //Move the train
    send_message_to_train("L20S5\015", NULL, 0, DEFAULT_SLEEP_TICK);
 
@@ -115,7 +122,7 @@ void run_config_1()
 #endif
 
    //Poll track 6 to see if train is there
-   poll_track(buffer, 3, 15, "C6\015");
+   poll_track(buffer, 3, 15, "C7\015");
    char * commands[] = {"M4R\015", "M3G\015", "L20S4\015"};
    if(buffer[1] == '1')
       send_sequential_commands(commands, 3);
@@ -124,7 +131,7 @@ void run_config_1()
    buffer[0] = buffer[1] = buffer[2] = ' ';
 
    //Poll track 1 to ensure that train and wagon are together
-   poll_track(buffer, 3, 15, "C1\015");
+   poll_track(buffer, 3, 25, "C1\015");
 
    //Prepare command list if train is there
    char * commands2[] = {"L20S0\015", "L20D\015", "M5R\015", "M6R\015", "L20S5\015"};
@@ -150,8 +157,15 @@ void run_config_3()
    //Response buffer
    char buffer[3] = {' ', ' ', ' '};
 
+   if(zamboni)
+      poll_track(buffer, 3, 25, "C7\015");
+
    //Start the train
    send_message_to_train("L20S5\015", NULL, 0, DEFAULT_SLEEP_TICK);
+   
+   //Wait for zamboni to pass
+   if(zamboni)
+      poll_track(buffer, 3, 25, "C14\015");
 
    //Poll track 13 to prepare tracks
    poll_track(buffer, 3, 15, "C13\015");
@@ -162,6 +176,9 @@ void run_config_3()
 
    //Clear buffer
    buffer[0] = buffer[1] = buffer[2] = ' ';
+
+   //give the train some time
+   sleep(DEFAULT_SLEEP_TICK * 30);
 
    //Poll track 13 to ensure train and wagon are together is there 
    poll_track(buffer, 3, 15, "C13\015");
@@ -201,6 +218,9 @@ void run_config_4()
    //Response buffer
    char buffer[3] = {' ', ' ', ' '};
 
+   if(zamboni)
+      poll_track(buffer, 3, 30, "C4\015");
+
    //Start the train
    send_message_to_train("L20S5\015", NULL, 0, DEFAULT_SLEEP_TICK);
 
@@ -212,6 +232,9 @@ void run_config_4()
 
    //Clear buffer
    buffer[0] = buffer[1] = buffer[2] = ' ';
+
+   if(zamboni)
+      poll_track(buffer, 3, 20, "C13\015");
 
    //Poll track 14
    poll_track(buffer, 3, 15, "C14\015");
@@ -277,66 +300,17 @@ void set_initial_tracks()
    send_sequential_commands(track_list, 5);
 }
 
-void determine_zamboni_config()
-{
-   char response[8];
-   char reset[] = RESET;
-   char * directions[] = {
-                          "C3\015",
-                          "C4\015",
-                          "C6\015",
-                          "C7\015",
-                          "C10\015",
-                          "C13\015",
-                          "C14\015",
-                          "C15\015",
-                         };
-
-   int i;
-   for(i = 0; i < 8; i++)
-   {
-      send_message_to_train(reset, response, 0, DEFAULT_SLEEP_TICK);
-      send_message_to_train(directions[i], response, 3, 90);
-   }
-}
-
-void detect_zamboni_presence()
-{
-   char response[4];
-   send_message_to_train(RESET, response, 0, DEFAULT_SLEEP_TICK);
-   send_message_to_train("C4\015", response, 3, DEFAULT_SLEEP_TICK);
-
-   if(response[1] == '1')
-   {
-      zamboni = TRUE;
-   }
-}
-
+//Detect the wagon to determine train and wagon configuration
 void determine_train_config()
 {   
    //Buffer for response
    char response[4];
 
    //Train and wagon locations
-   int train = -1;
    int wagon = -1;
 
-   //Look for train
-   int i;
-   for(i = 0; i < 2; i++)
-   {
-      send_message_to_train(RESET, response, 0, DEFAULT_SLEEP_TICK);
-      send_message_to_train(train_locs[i], response, 3, DEFAULT_SLEEP_TICK);
-
-      //Determine if train was found
-      if(response[1] == '1')
-      {
-         train = i;
-         break;
-      }
-   }
-
    //Look for wagon
+   int i;
    for(i = 0; i < 3; i++)
    {
       send_message_to_train(RESET, response, 0, DEFAULT_SLEEP_TICK);
@@ -351,26 +325,12 @@ void determine_train_config()
    }
 
    //Determine train/wagon configuration
-   if(train == 0)
-   {
-      if(wagon == 1)
-         train_config = CONFIG_3;
-      else if(wagon == 2)
-         train_config = CONFIG_4;
-      else
-         output_string(&train_wnd, "Unable to locate wagon location\n");
-   }
-   else if(train == 1)
-   {
-      if(wagon == 0)
-         train_config = CONFIG_1;
-      else
-         output_string(&train_wnd, "Unable to locate wagon location\n");
-   }
-   else
-   {
-      output_string(&train_wnd, "Unable to locate train/wagon location\n");
-   }
+   if(wagon == 0)
+      train_config = CONFIG_1;
+   else if(wagon == 1)
+      train_config = CONFIG_3;
+   else if(wagon == 2)
+      train_config = CONFIG_4;
 }
 
 //Main Train process
@@ -409,6 +369,17 @@ void train_process(PROCESS self, PARAM param)
          output_string(&train_wnd, "Could not determine train/wagon configuration\n");
          break;
    }
+
+   //Detect zamboni
+   char buf[3] = {' ', ' ', ' '};
+   poll_track(buf, 3, 50, "C10\015");
+   if(buf[1] == '1')
+      zamboni = TRUE;
+
+   if(zamboni)
+      output_string(&train_wnd, "Zamboni on the track...\n");
+   else
+      output_string(&train_wnd, "Zamboni not detected...\n");
 
    while(1)
    {

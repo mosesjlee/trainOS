@@ -10,6 +10,7 @@
 WINDOW shell_wnd  = {0, 9, 61, 16, 0, 0, 0xDC};
 WINDOW pac_wnd = {61, 9, 19, 16, 0, 0, 0xDC};
 extern WINDOW train_wnd;
+extern PORT train_port;
 
 //Helper debug function
 /*****>>> Below are my helper functions <<<********************/
@@ -157,7 +158,8 @@ void relay_train_commands(const char * flags, int flag_char_count)
                                  "m",
                                  "r",
                                  "t",
-                                 "init"
+                                 "init",
+                                 "reset"
                                };
 
    COM_Message msg;
@@ -230,6 +232,11 @@ void relay_train_commands(const char * flags, int flag_char_count)
    {
       //Initialize the train process
       init_train(&train_wnd);
+   }
+   else if(0 == k_strcmp(stripped_flags, flag_list[5]))
+   {
+      int reset = FALSE;
+      message(train_port, &reset);
    }
    else
    {

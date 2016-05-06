@@ -1,7 +1,5 @@
 #include <kernel.h> 
 #define DEFAULT_SLEEP_TICK 15
-#define ZAMBONI_COUNTER_CLOCKWISE 1
-#define ZAMBONI_CLOCKWISE 2
 
 #define CONFIG_1 0x01
 #define CONFIG_2 0x02
@@ -10,6 +8,12 @@
 
 #define RESET "R\015"
 #define REAL_TRAIN 0
+
+/*
+ Port for train
+*/
+PORT train_port;
+
 /*
   Train window
 */
@@ -19,13 +23,6 @@ WINDOW train_wnd = {0, 0, 80, 8, 0, 0, ' '};
   Zamboni variables
 */
 int zamboni = FALSE;
-unsigned int zamboni_direction = 0;
-
-enum _zamboni_direction {
-   no_zamboni,
-   counter_clockwise,
-   clockwise
-} ZAMBONI_DIRECTION;
 
 
 /*
@@ -33,7 +30,7 @@ enum _zamboni_direction {
 */
 unsigned int train_config = 0;
 
-const static char * train_locs [] = {"C5\015", "C8\015"};
+//Wagon locations
 const static char * wagon_locs [] = {"C2\015", "C11\015", "C16\015"};
 
 /*
@@ -46,13 +43,19 @@ void (*config_func)();
 //run the train application
 //**************************
 /*
-   Main API to send message to train hardware
+   Send message to train hardware
+   param 1: The command to send to train
+   param 2: If expecting a response, send in a reference to a buffer.
+            Pass in NULL if not expecting.
+   param 3: Size of buffer. Pass 0 if not expecting a response
+   param 4: Determine a sleep interval. Pass in DEFAULT_SLEEP_TICK if not sure
 */
 void send_message_to_train(const char * command, 
                            char * response, 
                            const unsigned int response_length,
                            const unsigned int sleep_time)
 {
+   //Prepare the message to send
    COM_Message msg;
    msg.output_buffer = command;
    msg.input_buffer = response;
@@ -66,7 +69,11 @@ void send_message_to_train(const char * command,
 }
 
 /*
-   Function to poll a specified track at num_poll times
+   Poll a specified track at num_poll times
+   param 1: Response buffer. You must pass in a non null buffer
+   param 2: Buffer length
+   param 3: How many times to poll a track
+   param 4: Track identifier
 */
 void poll_track(char * buffer, 
                 const unsigned int buf_length, 
@@ -74,10 +81,17 @@ void poll_track(char * buffer,
                 char * track)
 {
    int i = 0;
+
+   //Poll for num_poll times
    while(i < num_poll)
    {
+      //Send the clear buffer message
       send_message_to_train(RESET, NULL, 0, DEFAULT_SLEEP_TICK);
+
+      //Send the query
       send_message_to_train(track, buffer, 3, DEFAULT_SLEEP_TICK);
+
+      //If found break out of loop
       if(buffer[1] == '1')
          break;
       i++;
@@ -86,26 +100,27 @@ void poll_track(char * buffer,
 
 /*
    Send a series of commands in rapid succession that do not require response
+   param 1: List of commands to send
+   param 2: List length
 */
 void send_sequential_commands(char ** command_list, int list_length)
 {
    int i;
+   //Send them messages
    for(i = 0; i < list_length; i++)
-   {
       send_message_to_train(command_list[i], NULL, 0, DEFAULT_SLEEP_TICK);
-   }
 }
 
-/*
-   Function to stop train and change direction
-*/
-
 /************** >>> Run the different configurations <<< ************/
+/*
+   Run configuration 1
+*/
 void run_config_1()
 {
    //Response buffer
    char buffer[3] = {' ', ' ', ' '};
 
+   //If zamboni present close the right most loop
    char * right_loop[] = {"M1R\015", "M2R\015", "M7R\015", "M8R\015"};
    if(zamboni)
    {
@@ -147,16 +162,23 @@ void run_config_1()
       send_message_to_train("L20S0\015", NULL, 0, DEFAULT_SLEEP_TICK);
 }
 
+/*
+   Same thing as config 1.
+*/
 void run_config_2()
 {
    run_config_1();
 }
 
+/*
+   Run configuration 3
+*/
 void run_config_3()
 {
    //Response buffer
    char buffer[3] = {' ', ' ', ' '};
 
+   //If zamboni present, poll track 7
    if(zamboni)
       poll_track(buffer, 3, 25, "C7\015");
 
@@ -170,6 +192,7 @@ void run_config_3()
    //Poll track 13 to prepare tracks
    poll_track(buffer, 3, 15, "C13\015");
 
+   //Close the right most loop to rendez-vous with wagon
    char * commands[] = {"M1R\015", "M2R\015", "M7R\015"};
    if(buffer[1] == '1')
       send_sequential_commands(commands, 3);
@@ -190,16 +213,21 @@ void run_config_3()
    //Clear buffer
    buffer[0] = buffer[1] = buffer[2] = ' ';
 
-   //Poll track 3 to close switch 1
-   poll_track(buffer, 3, 10, "C3\015");
-   if(buffer[1] == '1')
-      send_message_to_train("M1R\015", NULL, 0, DEFAULT_SLEEP_TICK);
+   //Poll track 3 to close switch 1 if zamboni present
+   if(zamboni)
+   {
+      poll_track(buffer, 3, 10, "C3\015");
+      if(buffer[1] == '1')
+         send_message_to_train("M1R\015", NULL, 0, DEFAULT_SLEEP_TICK);
+   }
 
    //Clear buffer
    buffer[0] = buffer[1] = buffer[2] = ' ';
 
    //Poll track 6
    poll_track(buffer, 3, 10, "C6\015");
+
+   //Bring it back home
    char * commands2[] = {"L20S0\015", "M4R\015", "M3R\015", "L20D\015", "L20S4\015"};
    if(buffer[1] == '1')
       send_sequential_commands(commands2, 5);
@@ -213,11 +241,15 @@ void run_config_3()
       send_message_to_train("L20S0\015", NULL, 0, DEFAULT_SLEEP_TICK);
 }
 
+/*
+   Run configuration 4
+*/
 void run_config_4()
 {
    //Response buffer
    char buffer[3] = {' ', ' ', ' '};
 
+   //If zamboni present check track 4
    if(zamboni)
       poll_track(buffer, 3, 30, "C4\015");
 
@@ -233,6 +265,7 @@ void run_config_4()
    //Clear buffer
    buffer[0] = buffer[1] = buffer[2] = ' ';
 
+   //If zamboni present poll track 13
    if(zamboni)
       poll_track(buffer, 3, 20, "C13\015");
 
@@ -266,7 +299,6 @@ void run_config_4()
    if(buffer[1] == '1')
       send_message_to_train("M8R\015", NULL, 0, DEFAULT_SLEEP_TICK);
 
-
    //Clear buffer
    buffer[0] = buffer[1] = buffer[2] = ' ';
 
@@ -276,12 +308,13 @@ void run_config_4()
    if(buffer[1] == '1')
       send_sequential_commands(commands4, 2);
 
-
-  //Poll track 5
+  //Poll track 5 to bring it home
   poll_track(buffer, 3, 10, "C5\015");
   if(buffer[1] == '1')
    send_message_to_train("L20S0\015", NULL, 0, DEFAULT_SLEEP_TICK);
 }
+
+/*==============>>> End configurations <<<================*/
 
 /*
    Set up the initial tracks
@@ -300,7 +333,9 @@ void set_initial_tracks()
    send_sequential_commands(track_list, 5);
 }
 
-//Detect the wagon to determine train and wagon configuration
+/*
+   Poll the different locations to see which configuration it is
+*/
 void determine_train_config()
 {   
    //Buffer for response
@@ -333,66 +368,78 @@ void determine_train_config()
       train_config = CONFIG_4;
 }
 
-//Main Train process
+/*
+   Main train process
+*/
 void train_process(PROCESS self, PARAM param)
 {
+   //Flag to see if exercise is complete
    int finished = FALSE;
 
    //Title
    output_string(&train_wnd, "Welcome to Train Simulator\n");
 
-   //Enumerated type
-   ZAMBONI_DIRECTION = no_zamboni;
-   
-   //Create one big loop for zamboni
-   set_initial_tracks();
+   //For the receiving message
+   PROCESS sender;
 
-   //Determine train/wagon config
-   determine_train_config();
-
-   //Print out the train config on the window
-   switch(train_config)
-   {
-      case CONFIG_1:
-         output_string(&train_wnd, "Configuration 1/2\n");
-         config_func = run_config_1;
-         break;
-      case CONFIG_3:
-         output_string(&train_wnd, "Configuration 3\n");
-         config_func = run_config_3;
-         break;
-      case CONFIG_4:
-         output_string(&train_wnd, "Configuration 4\n");
-         config_func = run_config_4;
-         break;
-      default:
-         output_string(&train_wnd, "Could not determine train/wagon configuration\n");
-         break;
-   }
-
-   //Detect zamboni
+   //Some buffer
    char buf[3] = {' ', ' ', ' '};
-   poll_track(buf, 3, 50, "C10\015");
-   if(buf[1] == '1')
-      zamboni = TRUE;
 
-   if(zamboni)
-      output_string(&train_wnd, "Zamboni on the track...\n");
-   else
-      output_string(&train_wnd, "Zamboni not detected...\n");
-
+   //Main loop
    while(1)
    {
       sleep(15);
 
       if(!finished)
       {
+         //Create one big loop for zamboni
+         set_initial_tracks();
+
+         //Determine train/wagon config
+         determine_train_config();
+
+         //Print out the train config on the window
+         switch(train_config)
+         {
+            case CONFIG_1:
+               output_string(&train_wnd, "Configuration 1/2\n");
+               config_func = run_config_1;
+               break;
+            case CONFIG_3:
+               output_string(&train_wnd, "Configuration 3\n");
+               config_func = run_config_3;
+               break;
+            case CONFIG_4:
+               output_string(&train_wnd, "Configuration 4\n");
+               config_func = run_config_4;
+               break;
+            default:
+               output_string(&train_wnd, "Could not determine train/wagon configuration\n");
+               break;
+         }
+
+         //Look for zamboni
+         poll_track(buf, 3, 50, "C10\015");
+         if(buf[1] == '1')
+            zamboni = TRUE;
+
+         //Display zamboni status
+         if(zamboni)
+            output_string(&train_wnd, "Zamboni on the track...\n");
+         else
+            output_string(&train_wnd, "Zamboni not detected...\n");
+
+         //Run the desired configuration
          (*config_func)();
          finished = TRUE;
+
+         output_string(&train_wnd, "Finished running train\n");
       }
+      //Wait for user to send a reset command
       else
       {
-         
+         finished = *((int *) receive(&sender));
+         output_string(&train_wnd, "Restarting train...\n");
       }
    }
 }
@@ -400,10 +447,10 @@ void train_process(PROCESS self, PARAM param)
 
 void init_train(WINDOW* wnd)
 {
-   create_process(train_process, 
-                  3, 
-                  0, 
-                  "Train Process");
+   train_port = create_process(train_process, 
+                               3, 
+                               0, 
+                               "Train Process");
 
    resign();
 }

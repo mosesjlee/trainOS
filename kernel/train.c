@@ -7,7 +7,7 @@
 #define CONFIG_4 0x04
 
 #define RESET "R\015"
-#define REAL_TRAIN 0
+#define REAL_TRAIN 1
 
 /*
  Port for train
@@ -133,12 +133,13 @@ void run_config_1()
 
 //If this is a real train slow the train down a bit
 #if REAL_TRAIN
-   send_message_to_train("L20S4\015", NULL, 0, DEFAULT_SLEEP_TICK);
+   sleep(DEFAULT_SLEEP_TICK * 10);
+   send_message_to_train("L20S3\015", NULL, 0, DEFAULT_SLEEP_TICK);
 #endif
 
    //Poll track 6 to see if train is there
    poll_track(buffer, 3, 15, "C7\015");
-   char * commands[] = {"M4R\015", "M3G\015", "L20S4\015"};
+   char * commands[] = {"M4R\015", "M3G\015", "L20S3\015"};
    if(buffer[1] == '1')
       send_sequential_commands(commands, 3);
 
@@ -146,7 +147,7 @@ void run_config_1()
    buffer[0] = buffer[1] = buffer[2] = ' ';
 
    //Poll track 1 to ensure that train and wagon are together
-   poll_track(buffer, 3, 25, "C1\015");
+   poll_track(buffer, 3, 35, "C1\015");
 
    //Prepare command list if train is there
    char * commands2[] = {"L20S0\015", "L20D\015", "M5R\015", "M6R\015", "L20S5\015"};
@@ -221,16 +222,25 @@ void run_config_3()
          send_message_to_train("M1R\015", NULL, 0, DEFAULT_SLEEP_TICK);
    }
 
+#if REAL_TRAIN
+   //Slow real train down
+   send_message_to_train("L20S3\015", NULL, 0, DEFAULT_SLEEP_TICK);
+#endif
+
    //Clear buffer
    buffer[0] = buffer[1] = buffer[2] = ' ';
 
    //Poll track 6
-   poll_track(buffer, 3, 10, "C6\015");
+   poll_track(buffer, 3, 20, "C6\015");
 
    //Bring it back home
    char * commands2[] = {"L20S0\015", "M4R\015", "M3R\015", "L20D\015", "L20S4\015"};
    if(buffer[1] == '1')
       send_sequential_commands(commands2, 5);
+
+#if REAL_TRAIN
+   send_message_to_train("L20S3\015", NULL, 0, DEFAULT_SLEEP_TICK);
+#endif
 
    //Clear buffer
    buffer[0] = buffer[1] = buffer[2] = ' ';
@@ -256,8 +266,13 @@ void run_config_4()
    //Start the train
    send_message_to_train("L20S5\015", NULL, 0, DEFAULT_SLEEP_TICK);
 
+#if REAL_TRAIN
+   //Slow train
+   send_message_to_train("L20S3\015", NULL, 0, DEFAULT_SLEEP_TICK);
+#endif
+
    //Poll track 6
-   poll_track(buffer, 3, 10, "C6\015");
+   poll_track(buffer, 3, 15, "C6\015");
    char * commands[] = {"L20S0\015", "M4G\015", "L20D\015", "L20S5\015"};
    if(buffer[1] == '1')
       send_sequential_commands(commands, 4);
@@ -269,17 +284,36 @@ void run_config_4()
    if(zamboni)
       poll_track(buffer, 3, 20, "C13\015");
 
+#if REAL_TRAIN
+   //Poll track 15
+   poll_track(buffer, 3, 20, "C3\015");
+   send_message_to_train("L20S3\015", NULL, 0, DEFAULT_SLEEP_TICK);
+#endif
+
    //Poll track 14
-   poll_track(buffer, 3, 15, "C14\015");
+   poll_track(buffer, 3, 20, "C14\015");
    char * commands2[] = {"L20S0\015", "M9G\015", "L20D\015", "L20S5\015"};
    if(buffer[1] == '1')
       send_sequential_commands(commands2, 4);
 
    //No deterministic way so just sleep and hope train makes contact
+#if REAL_TRAIN
+   sleep(DEFAULT_SLEEP_TICK * 13);
+   send_message_to_train("L20S1\015", NULL, 0, DEFAULT_SLEEP_TICK);
+#else
    sleep(DEFAULT_SLEEP_TICK * 18);
+#endif
 
    //Stop the train
    send_message_to_train("L20S0\015", NULL, 0, DEFAULT_SLEEP_TICK);
+
+   //If zamboni present wait for it to go away
+   if(zamboni)
+   {
+      //Clear buffer
+      buffer[0] = buffer[1] = buffer[2] = ' ';
+      poll_track(buffer, 3, 15, "C7\015");
+   }
 
    //Ensure train stops
    sleep(DEFAULT_SLEEP_TICK);

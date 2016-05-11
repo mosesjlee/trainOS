@@ -138,7 +138,6 @@ void run_config_1()
 #endif
 
    //Poll track 6 to see if train is there
-   poll_track(buffer, 3, 15, "C7\015");
    char * commands[] = {"M4R\015", "M3G\015", "L20S3\015"};
    if(buffer[1] == '1')
       send_sequential_commands(commands, 3);
@@ -147,7 +146,7 @@ void run_config_1()
    buffer[0] = buffer[1] = buffer[2] = ' ';
 
    //Poll track 1 to ensure that train and wagon are together
-   poll_track(buffer, 3, 35, "C1\015");
+   poll_track(buffer, 3, 50, "C1\015");
 
    //Prepare command list if train is there
    char * commands2[] = {"L20S0\015", "L20D\015", "M5R\015", "M6R\015", "L20S5\015"};
